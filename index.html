@@ -5717,4 +5717,33 @@ html.ui-settled .ui-enter .row:nth-child(n+9){animation-delay:120ms!important}
   after();
 })();
 </script>
+
+<!-- ═══ 리포트 분야 표기 · 2026-10-02 ═══════════════════════════════════════
+     분야가 비어 있는 책을 「미분류」 대신 「신간」으로 묶는다.
+     분야는 알라딘 분류를 나중에 받아 오는데(genre_reap), 갓 나온 책은 아직 분류가 붙지 않아 비어 있다.
+     10/2 기준 최근 30회차의 분야 빈 115행 중 90행(78%)이 출간 90일 이내였다.
+     분류가 들어오면 제 분야로 자동으로 옮겨 간다.
+     ════════════════════════════════════════════════════════════════════ -->
+<script id="genrefix1002">
+(function(){
+  // 리포트를 그리는 동안만 빈 분야를 「신간」으로 채운다. 순위표 등 다른 화면은 그대로 둔다.
+  // (요약 문장 「분야는 ○○가 가장 두껍습니다」 가 「분야는 가 …」로 비던 것도 함께 고친다)
+  if(typeof paintReport==='function'){
+    const _pr=paintReport;
+    window.paintReport=paintReport=function(){
+      const touched=[];
+      try{ Object.values(SETS).forEach(set=>Array.isArray(set)&&set.forEach(rd=>
+        (rd.rows||[]).forEach(x=>{ if(x&&!x.g){ x.g='신간'; touched.push(x); } }))); }catch(e){}
+      try{ return _pr.apply(this,arguments); }
+      finally{ touched.forEach(x=>{ x.g=''; }); }
+    };
+  }
+  if(typeof genreParagraphs!=='function')return;
+  const _gp=genreParagraphs;
+  window.genreParagraphs=genreParagraphs=function(rows,...rest){
+    const r=(rows||[]).map(x=>(x&&!x.g)?Object.assign({},x,{g:'신간'}):x);
+    return _gp.call(this,r,...rest);
+  };
+})();
+</script>
 </body></html>
