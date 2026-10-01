@@ -2387,15 +2387,13 @@ const alaLookup=isbn=>ala('lookup',{isbn},'ala:'+isbn,864e5);
    어느 쪽이 먼저 움직였는지가 인과 판단의 실마리가 된다.
    절대 건수가 아니라 기간 내 최대치를 100 으로 놓은 상대값이다. */
 async function trendSearch(q,from,to){
-  const c=getCfg();
-  const id=(c.nvid||'').trim(), sec=(c.nvsec||'').trim();
-  if(!id||!sec)return null;
+  // 네이버 키는 서버에 있다. 브라우저 키는 필요 없다.
   const ck=`tr:${q}:${from}:${to}`;
   const hit=await idbGet(ck).catch(()=>null);
   if(hit&&Date.now()-hit.at<864e5)return hit.d;
   const r=await fetch(BUZZ_FN,{method:'POST',
     headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({op:'trend',q,from,to,id,secret:sec})});
+    body:JSON.stringify({op:'trend',q,from,to})});
   const j=await r.json();
   if(j.error)throw new Error(j.error);
   await idbSet(ck,{d:j,at:Date.now()});
@@ -2563,8 +2561,6 @@ function libBars(items,label,ko){
 /** 검색량 추이를 순위와 같은 축에 겹친다. */
 async function paintTrend(isbn){
   const box=$('#trendbox'); if(!box)return;
-  const c=getCfg();
-  if(!((c.nvid||'').trim()&&(c.nvsec||'').trim())){ box.innerHTML=''; return; }
   const b=DB.hist[isbn]||{};
   const title=(b.t||'').replace(/\s*\(.*?\)\s*/g,'').trim();
   const rank=(b.h||[]).filter(x=>x.r!=null).map(x=>({d:String(x.d).replace(/-/g,''),r:x.r}));
