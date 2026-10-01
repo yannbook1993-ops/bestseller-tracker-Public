@@ -5742,4 +5742,70 @@ html.ui-settled .ui-enter .row:nth-child(n+9){animation-delay:120ms!important}
   };
 })();
 </script>
+
+<!-- ═══ 글자·리포트 다듬기 · 2026-10-02 ═════════════════════════════════════
+     「텍스트가 튄다」
+       1) 숫자만 고정폭(코딩용) 글꼴로 바뀌어 문장 안에서 숫자가 따로 놀았다
+          → 본문 글꼴 그대로 두고 자릿수 폭만 맞춘다(tabular-nums)
+       2) 리포트 절 제목(「1) 도서판매 동향 분석」)이 그 아래 그래프 제목보다 작았다 → 위계를 바로잡는다
+       3) 리포트 안 제목·설명·막대·카드의 왼쪽 시작점이 8px 씩 들쭉날쭉했다 → 한 줄로
+       4) PC 에서 자리가 넉넉한데 책 제목이 「리더는 …」처럼 잘렸다 → 이름 칸을 넓힌다
+       5) 10px 남짓한 아주 작은 글자 → 11px 이상으로
+     리포트
+       6) 판매지수 증감률 그래프에 0% 가 빨갛게 줄지어 나왔다.
+          가장 최근 일간 회차는 서점 판매지수가 하루 늦게 갱신돼 직전 회차와 값이 같고(확정은 다음 날 아침),
+          월초 월간 회차도 비교할 날이 적다. 변화 없는 책은 증감률 「상위」가 아니므로 빼고,
+          남는 책이 4종 미만이면 그래프 대신 까닭을 적는다.
+     ════════════════════════════════════════════════════════════════════ -->
+<style id="typefix1002">
+:root{--mono:var(--sans)}
+.num,.mono,.bv,.row .pv,.row .dv,.row .rk,.cd .v{font-family:var(--sans);font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1}
+.cd .k{font-size:11px;letter-spacing:.2px;text-transform:none}
+.lh{font-size:11px}
+
+#report .sec2{font-size:16px;letter-spacing:-.2px;color:var(--ink);padding-top:26px}
+#report .sec2::before{content:'';display:inline-block;width:3px;height:14px;border-radius:2px;
+  background:var(--gr);margin-right:9px;vertical-align:-1px}
+#report h3.s{font-size:14px;font-weight:700;color:var(--ink);padding-top:20px;padding-bottom:9px}
+#report p.none{font-size:12.5px;line-height:1.75}
+#report .bar{margin-bottom:8px}
+#report .bl{font-size:12.5px;color:var(--ink);opacity:.86}
+#report .bar .bl{width:auto;min-width:0}
+#report .bv{font-size:12.5px}
+#report .sr-wait{margin-top:2px}
+@media (min-width:900px){
+  #report h3.s,#report p.none{padding-left:16px;padding-right:16px}
+  #report .bar{grid-template-columns:minmax(150px,240px) 1fr 70px}
+}
+</style>
+<script id="typefix1002js">
+(function(){
+  if(typeof paintReport!=='function')return;
+  const _pr=paintReport;
+  window.paintReport=paintReport=function(){
+    // 증감률 0% 인 책은 그래프에서 뺀다(그리는 동안만). 원래 값은 되돌린다.
+    let cur=null, zero=[], left=0;
+    try{ cur=SETS[mode][idx[mode]]; }catch(e){}
+    if(cur&&cur.rows){
+      cur.rows.forEach(x=>{ if(x&&x.sr===0){ zero.push(x); x.sr=null; } else if(x&&x.sr!=null)left++; });
+    }
+    let out;
+    try{ out=_pr.apply(this,arguments); }
+    finally{ zero.forEach(x=>{ x.sr=0; }); }
+    try{
+      if(zero.length>=4&&left<4){
+        const cap=[...document.querySelectorAll('#report p.none')].find(p=>/위쪽이 상위입니다/.test(p.textContent));
+        if(cap&&!document.querySelector('#report .sr-wait')){
+          const why=mode==='daily'
+            ?'이 회차의 판매지수는 아직 직전 회차와 같습니다. 서점 판매지수는 하루 늦게 갱신되어 다음 날 아침에 확정됩니다.'
+            :'이 기간은 아직 비교할 회차가 적어 판매지수가 거의 바뀌지 않았습니다.';
+          cap.insertAdjacentHTML('afterend',`<h3 class="s">[그래프 2] 판매지수 증감률</h3>
+            <p class="none sr-wait">${why} 증감률은 그 뒤에 나옵니다. 직전 회차(◀)로 가면 확정된 증감률을 볼 수 있습니다.</p>`);
+        }
+      }
+    }catch(e){}
+    return out;
+  };
+})();
+</script>
 </body></html>
