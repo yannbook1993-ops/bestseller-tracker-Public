@@ -5417,4 +5417,217 @@ if(location.hash==='#admin')adEnter();
   };
 })();
 </script>
+
+<!-- ═══ 표지 보정 · 2026-10-02 ════════════════════════════════════════════
+     서버 자료 우선 블록 뒤, </body> 바로 앞에 붙인다. 원래 코드는 건드리지 않고 tryCoverChain 만 갈아 끼운다.
+     증상: 도서 상세에 표지가 안 뜨고 「표지 연결하기」만 나온다.
+     원인
+       1) 알라딘 표지 주소를 상품ID 로 만들던 형식(cover/cover500/{ID}_1.jpg 등)이 전부 404 다.
+          알라딘 실제 주소는 product/{앞5}/{다음2}/cover500/{ISBN10}_{버전}.jpg 라 ID 만으로 못 만든다.
+       2) 서버(book-cover 함수)가 확인해 covers 표에 적어 둔 표지 주소를 화면이 읽지 않았다.
+       3) 9/8 이후 회차는 상품ID(pid)마저 비어 교보·예스24 후보도 안 생겼다(서버는 10/2 에 고침).
+     고친 것 — 표지 후보 순서
+       ① 서버 cover_pick 의 주소 — 도서관 정보나루 표지를 모으는 동안은 기존 covers 우선,
+          다 모이면 서버(cover_cfg.mode=lib)가 정보나루 우선으로 바꾼다
+       ② 없으면 book-cover 함수에 이 책을 바로 물어 확인·저장
+       ③ 그래도 없으면 예전 후보(깨진 알라딘 형식은 뺀다)
+     ════════════════════════════════════════════════════════════════════ -->
+<script id="coverfix1002">
+(function(){
+  if(typeof tryCoverChain!=='function'||typeof SB_URL==='undefined')return;
+  const H={apikey:SB_KEY,Authorization:`Bearer ${SB_KEY}`};
+  const FN=`${SB_URL}/functions/v1/book-cover`;
+  let MAP=null, mapAt=0, mapP=null;           // isbn → {url} 또는 {none:true}
+  const asked={};                               // 이 세션에서 함수에 물어본 책
+
+  /** covers 표를 통째로 받아 둔다. 확인된 주소와 「없음 확인」만 담는다. 30분 기억. */
+  function coverMap(){
+    if(MAP&&Date.now()-mapAt<18e5)return Promise.resolve(MAP);
+    if(mapP)return mapP;
+    mapP=(async()=>{
+      const m={};
+      try{
+        for(let off=0;;off+=1000){
+          // cover_pick — 서버가 고른 표지 한 줄. 정보나루 수집이 끝나기 전엔 기존 covers 우선,
+          // 다 모이면 서버가 정보나루 우선으로 바꾼다. 화면은 고른 결과만 읽는다.
+          const r=await fetch(`${SB_URL}/rest/v1/cover_pick?select=isbn,url,none&or=(url.not.is.null,none.is.true)&order=isbn&limit=1000&offset=${off}`,{headers:H});
+          if(!r.ok)break;
+          const a=await r.json();
+          a.forEach(x=>{ m[x.isbn]=x.url?{url:x.url}:{none:true}; });
+          if(a.length<1000)break;
+        }
+      }catch(e){}
+      MAP=m; mapAt=Date.now(); mapP=null; return m;
+    })();
+    return mapP;
+  }
+  coverMap();   // 미리 받아 둔다
+
+  /** 서버 함수에 이 책 표지를 확인시킨다. 찾으면 covers 에도 적힌다. */
+  async function askServer(isbn){
+    if(asked[isbn])return asked[isbn];
+    asked[isbn]=(async()=>{
+      try{
+        const r=await fetch(FN,{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({isbns:[isbn]})});
+        const j=await r.json();
+        const x=j&&j.results&&j.results[0];
+        if(x&&x.url){ if(MAP)MAP[isbn]={url:x.url}; return x.url; }
+        if(x&&x.src==='none'&&MAP)MAP[isbn]={none:true};
+      }catch(e){}
+      return null;
+    })();
+    return asked[isbn];
+  }
+
+  // 알라딘 상품ID 로 만든 주소는 404 라 뺀다. product/ 경로(실제 주소)는 남긴다.
+  const broken=u=>/image\.aladin\.co\.kr\/(cover\/cover\d+|coversum)\//.test(u);
+
+  const _old=tryCoverChain;
+  window.tryCoverChain=tryCoverChain=function(isbn, box, onFail){
+    (async()=>{
+      let urls=[];
+      try{
+        const m=await coverMap();
+        const hit=m[isbn];
+        if(hit&&hit.url)urls.push(hit.url);
+        else if(!hit){ const u=await askServer(isbn); if(u)urls.push(u); }
+      }catch(e){}
+      if(CUR!==isbn)return;
+      let rest=[];
+      try{ rest=COVER_URLS(isbn).filter(u=>!broken(u)); }catch(e){}
+      rest.forEach(u=>{ if(!urls.includes(u))urls.push(u); });
+      if(!urls.length){ onFail(); return; }
+
+      let k=0;
+      const img=new Image();
+      img.referrerPolicy='no-referrer';
+      img.onload=()=>{
+        if(CUR!==isbn)return;
+        if(img.naturalWidth<40||img.naturalHeight<40){ next(); return; }
+        box.innerHTML=`<img src="${esc(img.src)}" alt="표지" referrerpolicy="no-referrer">`;
+        box.hidden=false;
+        bindZoom(box);
+        idbSet('cover:'+isbn,{url:img.src,at:Date.now()}).catch(()=>{});
+      };
+      img.onerror=next;
+      function next(){ k++; if(k<urls.length){ img.src=urls[k]; } else onFail(); }
+      img.src=urls[0];
+    })();
+  };
+})();
+</script>
+
+<!-- ═══ 화면 다듬기 · 2026-10-02 ════════════════════════════════════════
+     표지 보정 블록 뒤, </body> 바로 앞에 붙인다. 원래 규칙은 지우지 않고 뒤에서 덮어쓴다.
+     모션
+       1) 기간·날짜·서점을 바꿀 때마다 목록 50줄과 카드가 투명에서 다시 솟아 화면 전체가 깜빡였다
+          → 처음 한 번만 차례로 올라오고, 그 뒤 다시 그릴 때는 짧고 옅은 페이드만 준다
+       2) 카드의 튕기는 팝(오버슈트)이 나머지 모션과 결이 달랐다 → 같은 페이드업으로
+       3) PC 상세 패널이 반투명으로 겹쳐 보이고, 본문 폭이 0.28초 동안 줄며 글자가 프레임마다 다시 감겼다
+          → 패널은 오른쪽 끝에서 불투명하게 밀려 나오고, 본문 폭은 한 번에 바뀐다
+       4) 인트로 대기 2.25초 → 1.3초 (세션당 한 번은 그대로)
+     레이아웃
+       5) PC 카드가 탭·목록보다 8px 안쪽에 있었다 → 같은 가장자리에
+       6) 「신규 진입/이탈」 전환 상자가 안여백 때문에 다른 줄보다 넓었다
+       7) 상세를 열면 카드가 좁아지며 「3사 동시 등/재」처럼 글자가 깨졌다 → 한 줄 유지, 넘치면 가로로 민다
+       8) 사이드바에서 고른 항목만 테두리가 생겨 1px 밀렸다
+       9) 이벤트 필터 칩이 오른쪽에서 뚝 잘렸다 → 끝을 흐리게
+      10) 상세 표지가 머리줄에 붙어 있었다
+      11) 키보드로 움직일 때 어디에 있는지 보이지 않았다
+     ════════════════════════════════════════════════════════════════════ -->
+<style id="uifix1002">
+/* ── 모션 ── */
+@keyframes uiIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+@keyframes uiSoft{from{opacity:.45}to{opacity:1}}
+.cd{animation:uiIn .32s cubic-bezier(.22,1,.36,1) both}
+.row{animation-name:uiIn;animation-duration:.3s;animation-timing-function:cubic-bezier(.22,1,.36,1)}
+/* 첫 화면이 뜬 뒤(html.ui-settled)에는 다시 그려도 깜빡이지 않게 */
+html.ui-settled .cd{animation:none}
+html.ui-settled #list .row,html.ui-settled #newbody .row{animation:uiSoft .18s ease both;animation-delay:0s!important}
+html.ui-settled #report>*,html.ui-settled #newbody>*{animation:uiSoft .2s ease both;animation-delay:0s!important}
+/* 탭을 옮겨 새 화면이 열릴 때만 한 번 더 차례로 올라온다 */
+html.ui-settled .ui-enter .row{animation:uiIn .26s cubic-bezier(.22,1,.36,1) both}
+html.ui-settled .ui-enter .row:nth-child(n+9){animation-delay:120ms!important}
+.row,.cd,.seg button,.ctl button,.chips button,.btn,.tabbar button,.pick .arw button{
+  transition:transform .14s ease,background-color .18s ease,border-color .18s ease,color .18s ease,box-shadow .18s ease}
+
+/* 인트로 — 짧게 */
+#intro{animation:introOut .38s ease .95s both}
+#intro text{animation:introUp .55s cubic-bezier(.22,1,.36,1) both}
+
+/* ── 상세 시트 ── */
+@keyframes uiDrawer{from{transform:translateX(100%)}to{transform:none}}
+@keyframes uiSheetUp{from{opacity:0;transform:translateY(22px)}to{opacity:1;transform:none}}
+.sheet.on{animation:uiSheetUp .3s cubic-bezier(.22,1,.36,1) both}
+@media (min-width:900px){
+  .sheet.on{animation:uiDrawer .34s cubic-bezier(.22,1,.36,1) both}
+  .sheet.on.quick{animation:none}
+  .app,#list,#cards,.seg{transition:none}
+}
+.big .cover{top:20px}
+
+/* ── PC 정렬 ── */
+@media (min-width:900px){
+  #cards{padding-left:16px;padding-right:16px}
+  .cd .k,.cd .s{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .cd .v{max-width:none}
+  /* 상세가 열려 본문이 좁아지면 카드를 줄이지 않고 가로로 민다 */
+  body:has(.sheet.on) #cards{display:flex;overflow-x:auto;scrollbar-width:none;
+    -webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent);
+            mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent)}
+  body:has(.sheet.on) #cards::-webkit-scrollbar{display:none}
+  body:has(.sheet.on) .cd{flex:0 0 168px}
+  #nmode.ctl{max-width:928px;margin:12px 16px 12px;padding:3px}
+  #newbody .gr3,#report .gr3{padding-left:16px;padding-right:16px}
+  .tabbar button{border:1px solid transparent}
+  .tabbar button:hover:not([aria-selected="true"]){background:rgba(255,255,255,.03);color:var(--dim)}
+  .row:hover{background:var(--raise)}
+}
+
+/* ── 모바일 ── */
+@media (max-width:899px){
+  #cards{padding-top:10px}
+}
+
+/* ── 가로로 넘치는 칩 줄 — 끝을 흐린다 ── */
+.evseg,.evkind{-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 24px),transparent);
+                       mask-image:linear-gradient(90deg,#000 calc(100% - 24px),transparent)}
+.evseg.ui-end,.evkind.ui-end{-webkit-mask-image:none;mask-image:none}
+
+/* ── 키보드 초점 ── */
+:focus{outline:none}
+:focus-visible{outline:2px solid var(--gr);outline-offset:2px;border-radius:10px}
+.row:focus-visible{outline-offset:-2px}
+
+@media (prefers-reduced-motion:reduce){
+  .cd,.row,.sheet.on,#report>*,#newbody>*{animation:none!important}
+}
+</style>
+<script id="uifix1002js">
+(function(){
+  const root=document.documentElement;
+  // 첫 화면이 다 그려진 뒤부터는 다시 그려도 깜빡이지 않게 한다
+  const settle=()=>setTimeout(()=>root.classList.add('ui-settled'),900);
+  if(document.readyState==='complete')settle(); else addEventListener('load',settle);
+
+  // 탭을 옮길 때만 새 화면을 한 번 차례로 올린다
+  const nav=document.getElementById('nav');
+  if(nav)nav.addEventListener('click',()=>{
+    ['list','newbody','report'].forEach(id=>{
+      const el=document.getElementById(id); if(!el)return;
+      el.classList.add('ui-enter');
+      setTimeout(()=>el.classList.remove('ui-enter'),700);
+    });
+  },true);
+
+  // 칩 줄이 끝까지 밀리면 흐림을 걷는다
+  const edge=el=>{ if(!el)return;
+    const f=()=>el.classList.toggle('ui-end',el.scrollLeft+el.clientWidth>=el.scrollWidth-2);
+    el.addEventListener('scroll',f,{passive:true});
+    // 숨은 탭에서는 폭이 0 이라 잘못 잰다. 보일 때(크기가 바뀔 때) 다시 잰다.
+    if(window.ResizeObserver)new ResizeObserver(f).observe(el); else addEventListener('resize',f); };
+  edge(document.getElementById('evseg')); edge(document.getElementById('evkind'));
+})();
+</script>
 </body></html>
