@@ -5429,7 +5429,8 @@ if(location.hash==='#admin')adEnter();
      고친 것 — 표지 후보 순서
        ① 서버 cover_pick 의 주소 — 도서관 정보나루 표지를 모으는 동안은 기존 covers 우선,
           다 모이면 서버(cover_cfg.mode=lib)가 정보나루 우선으로 바꾼다
-       ② 없으면 book-cover 함수에 이 책을 바로 물어 확인·저장
+          (10/2 추가) 카카오 책 검색 표지도 함께 모은다 — 정보나루에 없으면 카카오
+       ② 서버에 아직 없으면 카카오(book-info) → book-cover 함수 순으로 바로 묻는다
        ③ 그래도 없으면 예전 후보(깨진 알라딘 형식은 뺀다)
      ════════════════════════════════════════════════════════════════════ -->
 <script id="coverfix1002">
@@ -5463,10 +5464,17 @@ if(location.hash==='#admin')adEnter();
   }
   coverMap();   // 미리 받아 둔다
 
-  /** 서버 함수에 이 책 표지를 확인시킨다. 찾으면 covers 에도 적힌다. */
+  /** 서버에 없는 책 — ① 카카오(book-info, 서버에 둔 키) ② book-cover 함수(찾으면 covers 에 적힌다). */
   async function askServer(isbn){
     if(asked[isbn])return asked[isbn];
     asked[isbn]=(async()=>{
+      try{
+        const r=await fetch(`${SB_URL}/functions/v1/book-info`,{method:'POST',
+          headers:{'Content-Type':'application/json'},body:JSON.stringify({isbn})});
+        const j=await r.json();
+        if(j&&j.cover){ const u=String(j.cover).replace(/^http:/,'https:');
+          if(MAP)MAP[isbn]={url:u}; return u; }
+      }catch(e){}
       try{
         const r=await fetch(FN,{method:'POST',headers:{'Content-Type':'application/json'},
           body:JSON.stringify({isbns:[isbn]})});
@@ -5628,6 +5636,85 @@ html.ui-settled .ui-enter .row:nth-child(n+9){animation-delay:120ms!important}
     // 숨은 탭에서는 폭이 0 이라 잘못 잰다. 보일 때(크기가 바뀔 때) 다시 잰다.
     if(window.ResizeObserver)new ResizeObserver(f).observe(el); else addEventListener('resize',f); };
   edge(document.getElementById('evseg')); edge(document.getElementById('evkind'));
+})();
+</script>
+
+<!-- ═══ 도서 상세 보정 · 2026-10-02 ═══════════════════════════════════════
+     증상: 순위에서 책을 눌러도 상세가 안 열리는 책이 많다(클릭해도 반응 없음).
+     원인: 서버 자료를 받은 뒤 도서 이력(DB.hist)을 3사 일간·주간으로만 다시 만든다(mfix 의 rebuildHist).
+           연간 순위(2000~2025)에만 있는 책 2,516종, 교보 단독 소급 일간(2024~)에만 있는 책 2,682종은
+           이력이 없어 openBook 이 조용히 돌아갔다. 검색에도 안 잡혔다.
+     고친 것: 서버 자료를 받은 뒤 모든 기간의 회차를 훑어 이력이 없는 책을 채운다.
+           연간 순위는 「다른 기간 기록」에 해마다, 교보 단독 일간은 한 줄 요약(기간·최고 순위·횟수)으로 넣는다.
+           3사 통합 순위 추이에는 섞지 않는다 — 집계 방식이 달라 비교하면 안 된다.
+           그래도 없으면 누른 순간 그 행의 서지로 상세를 연다.
+     ════════════════════════════════════════════════════════════════════ -->
+<script id="bookfix1002">
+(function(){
+  if(typeof openBook!=='function'||typeof DB==='undefined')return;
+  const META=['t','au','p','g','pd','pr'];
+  const meta=(b,x)=>META.forEach(k=>{ if(!b[k]&&x[k])b[k]=x[k]; });
+  const sets=()=>{ try{ return SETS; }catch(e){ return DB; } };
+
+  function ensureHist(){
+    const H=DB.hist||(DB.hist={}); const S=sets();
+    // 연간 — 「다른 기간 기록」에 해마다
+    (S.annual||[]).forEach(rd=>(rd.rows||[]).forEach(x=>{
+      if(!x.i)return;
+      const b=H[x.i]||(H[x.i]={t:x.t,h:[]}); meta(b,x);
+      const y=String(rd.y||'').slice(0,4); if(!y)return;
+      b.an=b.an||[]; if(!b.an.some(a=>a.y===y))b.an.push({y,r:x.r});
+    }));
+    // 교보 단독 일간(과거 소급) — 한 줄 요약
+    const ko={};
+    (S.daily||[]).filter(rd=>rd.src).forEach(rd=>{
+      const d=`${rd.y}.${rd.m}.${rd.d}`;
+      (rd.rows||[]).forEach(x=>{ if(!x.i)return;
+        const k=ko[x.i]||(ko[x.i]={n:0,best:999,from:d,to:d,src:rd.src,x});
+        k.n++; if(x.r<k.best)k.best=x.r; if(d<k.from)k.from=d; if(d>k.to)k.to=d; });
+    });
+    Object.entries(ko).forEach(([i,k])=>{
+      const b=H[i]||(H[i]={t:k.x.t,h:[]}); meta(b,k.x);
+      const l=`${k.src} 단독 일간 · ${k.from}~${k.to} · ${k.n}회`;
+      b.wk=(b.wk||[]).filter(w=>!/단독 일간/.test(w.l)); b.wk.push({l:`${l} 중 최고`,r:k.best});
+    });
+    // 월간 등 나머지 — 서지만이라도
+    ['monthly','weekly','half'].forEach(per=>(S[per]||[]).forEach(rd=>(rd.rows||[]).forEach(x=>{
+      if(!x.i)return; const b=H[x.i]||(H[x.i]={t:x.t,h:[]}); meta(b,x); })));
+    Object.values(H).forEach(b=>{ if(!b.h)b.h=[]; });
+  }
+  window.ensureHist=ensureHist;
+
+  const after=()=>{ try{ ensureHist(); if(typeof rebuildSearch==='function')rebuildSearch(); }
+                    catch(e){ console.warn('[bookfix] 이력 채우기 실패',e); } };
+  if(typeof serverSync==='function'){
+    const _ss=serverSync;
+    window.serverSync=serverSync=async function(){
+      const n=await _ss.apply(this,arguments);
+      if(n>0)after();
+      return n;
+    };
+  }
+  if(typeof rebuildAll==='function'){
+    const _ra=rebuildAll;
+    window.rebuildAll=rebuildAll=function(){ const r=_ra.apply(this,arguments); after(); return r; };
+  }
+
+  // 누른 순간에도 없으면 그 행의 서지로 연다
+  const _ob=openBook;
+  window.openBook=openBook=function(isbn){
+    if(isbn&&!DB.hist[isbn]){
+      ensureHist();
+      if(!DB.hist[isbn]){
+        const S=sets(); let row=null;
+        for(const per of Object.keys(S)){ const arr=S[per]; if(!Array.isArray(arr))continue;
+          for(const rd of arr){ row=(rd.rows||[]).find(x=>x.i===isbn); if(row)break; } if(row)break; }
+        DB.hist[isbn]=Object.assign({h:[]},row?{t:row.t,au:row.au,p:row.p,g:row.g,pd:row.pd,pr:row.pr}:{t:isbn});
+      }
+    }
+    return _ob.apply(this,arguments);
+  };
+  after();
 })();
 </script>
 </body></html>
