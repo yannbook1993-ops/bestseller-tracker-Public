@@ -878,6 +878,16 @@ table.seoji td.vl{text-align:justify;text-justify:inter-character;
 .okbox>b:first-child{display:block;color:var(--gr);margin-bottom:4px;font-size:13.5px}
 .okbox.bad{background:rgba(245,69,92,.09);border-color:rgba(245,69,92,.3)}
 .okbox.bad b{color:var(--up)}
+/* 점검 중 표시 (2026-10-03) — 로고 옆 작은 꼬리표. 없앨 때는 이 블록과 header 안 .mt 한 줄만 지운다. */
+.tbl{display:flex;align-items:center;gap:8px;flex-wrap:nowrap}
+.tb .mt{display:inline-flex;align-items:center;gap:5px;flex:0 0 auto;
+  font:700 11px/1 var(--sans);letter-spacing:.02em;white-space:nowrap;
+  color:#f5b545;background:rgba(245,181,69,.1);border:1px solid rgba(245,181,69,.45);
+  border-radius:var(--px);padding:4px 7px 4px 6px;cursor:default}
+.tb .mt i{width:6px;height:6px;border-radius:50%;background:#f5b545;
+  animation:mtp 1.6s ease-in-out infinite}
+@keyframes mtp{50%{opacity:.25}}
+@media (prefers-reduced-motion:reduce){.tb .mt i{animation:none}}
 </style></head>
 <body>
 
@@ -903,6 +913,7 @@ table.seoji td.vl{text-align:justify;text-justify:inter-character;
 
 <div class="app">
   <header class="tb">
+    <div class="tbl">
     <h1><svg class="wm" viewBox="0 0 152 30" aria-hidden="true">
       <defs><mask id="trm">
         <rect width="152" height="30" fill="#fff"/>
@@ -912,6 +923,14 @@ table.seoji td.vl{text-align:justify;text-justify:inter-character;
       </mask></defs>
       <text x="0" y="24" mask="url(#trm)">TRACE</text>
     </svg><span class="sr">TRACE</span></h1>
+    <span class="mt" role="status" title="데이터 점검 중입니다. 일부 순위·수치가 늦거나 맞지 않을 수 있습니다."><i aria-hidden="true"></i>점검 중</span>
+    </div>
+    <script>/* 로고 SVG 오른쪽 빈칸만큼 꼬리표를 당겨 글자 바로 옆에 붙인다(글꼴마다 글자 폭이 달라 재서 맞춘다). */
+    (function(){function fit(){var t=document.querySelector('.tb .wm text'),v=document.querySelector('.tb .wm'),m=document.querySelector('.tb .mt');
+      if(!t||!v||!m)return;var gap=v.getBoundingClientRect().right-t.getBoundingClientRect().right;
+      if(gap>0&&gap<120)m.style.marginLeft=(10-8-gap)+'px';}
+      fit();addEventListener('load',fit);addEventListener('resize',fit);
+      if(document.fonts&&document.fonts.ready)document.fonts.ready.then(fit);})();</script>
     <div class="tbq">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
       <input id="tq" type="search" placeholder="책 · 저자 · 출판사" autocomplete="off"
