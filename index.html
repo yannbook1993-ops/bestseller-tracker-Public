@@ -3175,6 +3175,20 @@ function pathCard(isbn){
     return `<span class="chip">${ic} ${esc(lb)}</span>`;
   }).join('');
   const short=P.n1||P.n;   // 미리 써 둔 짧은 요약. 없으면 전체 판단문
+  /* 2026-10-06 서버 paths 는 facts 를 {date,fact}, sources 를 {url,title} 객체로 준다.
+     예전 파일 자료는 문자열 / [이름,주소] 배열이다. 두 형식을 모두 받는다
+     (객체 형식에서 배열 구조분해가 터져 상세 화면 대부분이 안 열리던 문제). */
+  const facts=(Array.isArray(P.f)?P.f:[]).map(x=>{
+    if(x&&typeof x==='object'&&!Array.isArray(x))
+      return (x.date?`<i style="font-style:normal;color:var(--dim)">${esc(x.date)}</i> `:'')+esc(x.fact??x.text??'');
+    return x==null?'':String(x);
+  }).filter(Boolean);
+  const srcs=(Array.isArray(P.u)?P.u:[]).map(x=>{
+    if(Array.isArray(x))return {l:x[0],u:x[1]};
+    if(x&&typeof x==='object')return {l:x.title||x.label||x.url,u:x.url};
+    if(typeof x==='string')return {l:x,u:x};
+    return null;
+  }).filter(x=>x&&x.u&&/^https?:\/\//i.test(String(x.u)));
   return `<div class="pathcard${cls}">
     <div class="ph"><span class="tagbox">마케팅 분석</span><span class="tagbox st">${esc(P.s)}</span></div>
     <b>${esc(P.k)}</b>
@@ -3184,10 +3198,10 @@ function pathCard(isbn){
       <summary>근거·출처 보기</summary>
       <p style="margin-top:8px">${P.n}</p>
       <table class="mini"><tbody>
-        ${P.f.map(x=>`<tr><td colspan="2" style="text-align:left;color:var(--dim)">· ${x}</td></tr>`).join('')}
+        ${facts.map(x=>`<tr><td colspan="2" style="text-align:left;color:var(--dim)">· ${x}</td></tr>`).join('')}
       </tbody></table>
-      ${P.u&&P.u.length?`<p class="none" style="padding:8px 0 0">출처 · ${P.u.map(([l,u])=>
-        `<a href="${esc(u)}" target="_blank" rel="noopener" style="color:var(--gr)">${esc(l)}</a>`).join(' · ')}</p>`:''}
+      ${srcs.length?`<p class="none" style="padding:8px 0 0">출처 · ${srcs.map(s=>
+        `<a href="${esc(s.u)}" target="_blank" rel="noopener" style="color:var(--gr)">${esc(s.l)}</a>`).join(' · ')}</p>`:''}
     </details>
   </div>`;
 }
