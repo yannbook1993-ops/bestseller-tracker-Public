@@ -880,6 +880,45 @@ table.seoji td.vl{text-align:justify;text-justify:inter-character;
 .okbox.bad b{color:var(--up)}
 </style></head>
 <body>
+<!-- ═══ 로딩 화면 · 2026-10-08 ═════════════════════════════════════════
+     서버 자료를 다 받기 전에는 파일에 심어 둔 9/2 자료가 먼저 그려졌다가 바뀌었다.
+     → 서버 자료(회차·순위·도서·경로·언론)를 다 받고 화면을 다시 그린 뒤에 걷는다.
+     인트로(세션당 한 번)는 이 위에 겹쳐 뜬다. 동작은 맨 아래 boot1008js. -->
+<style id="boot1008">
+#boot{position:fixed;inset:0;z-index:9998;background:var(--bg);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px;
+  transition:opacity .35s ease,visibility 0s linear .35s}
+#boot.out{opacity:0;visibility:hidden;pointer-events:none}
+html.booting,html.booting body{overflow:hidden}
+#boot .bt-logo{font:900 22px/1 -apple-system,BlinkMacSystemFont,"Pretendard","Apple SD Gothic Neo",sans-serif;
+  letter-spacing:-1px;color:var(--gr)}
+#boot .bt-bar{position:relative;width:min(56vw,220px);height:2px;border-radius:2px;background:var(--line);overflow:hidden}
+#boot .bt-bar i{position:absolute;top:0;bottom:0;left:0;width:0;background:var(--gr);transition:width .3s ease}
+#boot.indet .bt-bar i{width:32%;animation:btSlide 1.1s ease-in-out infinite}
+@keyframes btSlide{from{left:-32%}to{left:100%}}
+#boot .bt-msg{font-size:13px;color:var(--dim);text-align:center;min-height:1.6em}
+#boot .bt-sub{font:11px/1.5 var(--mono);color:var(--faint);text-align:center;min-height:1.5em;letter-spacing:0}
+#boot .bt-sub b{font-weight:400;color:var(--gr)}
+#boot .bt-act{display:none;gap:8px;flex-wrap:wrap;justify-content:center}
+#boot.slow .bt-act,#boot.fail .bt-act{display:flex}
+#boot.slow [data-a="retry"]{display:none}
+#boot .bt-act button{height:34px;padding:0 14px;border-radius:8px;border:1px solid var(--line);
+  background:var(--surf);color:var(--ink);font-size:12.5px}
+#boot .bt-act button.pri{background:var(--gr);color:#04140c;border-color:transparent;font-weight:700}
+#boot.fail .bt-bar i{left:0;width:100%;background:var(--up);animation:none}
+@media (prefers-reduced-motion:reduce){#boot.indet .bt-bar i{left:0;width:100%;opacity:.45}}
+</style>
+<div id="boot" class="indet" role="status" aria-live="polite">
+  <div class="bt-logo">TRACE</div>
+  <div class="bt-bar"><i></i></div>
+  <div class="bt-msg">서버에서 순위 자료를 받는 중…</div>
+  <div class="bt-sub"></div>
+  <div class="bt-act">
+    <button type="button" class="pri" data-a="retry">다시 시도</button>
+    <button type="button" data-a="skip">파일 자료로 보기</button>
+  </div>
+</div>
+<script>document.documentElement.classList.add('booting');</script>
 
 
 
@@ -1378,7 +1417,7 @@ $('#list').addEventListener('click',e=>{
 
 /* ── 행 ── */
 function delta(x,solo,isM){
-  if(isM) return `<span class="fl">${x.mn}회</span>`;
+  if(isM) return x.mn==null?'<span class="fl">–</span>':`<span class="fl">${x.mn}회</span>`;
   if(solo) return '<span class="fl">–</span>';
   if(x._new) return '<span class="up">신규</span>';
   if(x.dl==null||x.dl===0) return '<span class="fl">–</span>';
@@ -1391,7 +1430,8 @@ function midCell(x,solo,isM,isD){
     return `${x._tot!=null?x._tot:'–'}<small>위 통합</small>`
       +`<em>${rest.length?rest.map(k=>SABBR[k]+' '+x[k]).join(' · '):'타 서점 없음'}</em>`;
   }
-  if(isM) return `${x.mb}<small>위</small><em>평균 ${x.mavg}위</em>`;
+  if(isM) return x.mb==null?'<span class="fl">–</span>'
+    :`${x.mb}<small>위</small><em>${x.mavg!=null?`평균 ${x.mavg}위`:''}</em>`;
   if(solo) return `<span style="font-size:13px">${esc(x.g||'—')}</span>`
     +`<em>${x.pd?x.pd.slice(0,4)+'.'+x.pd.slice(4,6):(x.pr?fmt(x.pr)+'원':'')}</em>`;
   return (isD?[x.k,x.y,x.a]:[x.k,x.y]).map(v).join('<span class="fl"> · </span>')
@@ -1424,8 +1464,8 @@ function cards(cur,solo,isM,isD){
     c.push({k:isD?'3사 동시 등재':'2사 동시 등재',v:n3+'종',s:`전체 ${rs.length}종 중`});
   }
   if(isM){
-    const full=Math.max(...rs.map(x=>x.mn));
-    c.push({k:'전 회차 등장',v:rs.filter(x=>x.mn===full).length+'종',s:`${full}회 모두`});
+    const ns=rs.map(x=>x.mn).filter(v=>v!=null), full=ns.length?Math.max(...ns):null;
+    if(full!=null)c.push({k:'전 회차 등장',v:rs.filter(x=>x.mn===full).length+'종',s:`${full}회 모두`});
     c.push({k:'집계 종수',v:rs.length+'종',s:'이 달에 한 번이라도'});
   }
   if(solo&&!isM)c.push({k:'수록 종수',v:rs.length+'종',s:cur.src||'교보문고 기준'});
@@ -5754,6 +5794,141 @@ html.ui-settled .ui-enter .row:nth-child(n+9){animation-delay:120ms!important}
     const r=(rows||[]).map(x=>(x&&!x.g)?Object.assign({},x,{g:'신간'}):x);
     return _gp.call(this,r,...rest);
   };
+})();
+</script>
+
+<!-- ═══ 월간 「최고 · 평균 · 등장」 채우기 · 2026-10-08 ═══════════════════════
+     증상: 월간 탭에서 「null위 · 평균 null위 · null회」가 찍혔다.
+     원인: 서버 월간 회차(build_round_monthly)는 순위만 만들고 mb·mavg·mn 을 비워 둔다.
+     고친 것: 비어 있으면 같은 달의 3사 일간 회차(src 없음 — 서버 월간이 합산하는 것과 같은 회차)에서
+             최고 순위·평균 순위·등장 횟수를 계산해 채운다. 서버가 값을 주면 그대로 쓴다. -->
+<script id="monthfix1008">
+(function(){
+  const DONE=new WeakSet();
+  function fillMonthly(){
+    try{
+      const ms=(SETS.monthly||[]), ds=(SETS.daily||[]).filter(d=>!d.src);
+      ms.forEach(rd=>{
+        if(!rd||DONE.has(rd)||rd.src)return;
+        const rows=rd.rows||[];
+        if(!rows.some(x=>x.mn==null||x.mb==null)){ DONE.add(rd); return; }
+        const agg={};
+        ds.filter(d=>d.y===rd.y&&d.m===rd.m).forEach(d=>(d.rows||[]).forEach(x=>{
+          if(!x.i||x.r==null)return;
+          const a=agg[x.i]||(agg[x.i]={n:0,sum:0,best:1e9});
+          a.n++; a.sum+=x.r; if(x.r<a.best)a.best=x.r;
+        }));
+        rows.forEach(x=>{ const a=agg[x.i]; if(!a)return;
+          if(x.mn==null)x.mn=a.n;
+          if(x.mb==null)x.mb=a.best;
+          if(x.mavg==null)x.mavg=Math.round(a.sum/a.n*10)/10; });
+        DONE.add(rd);
+      });
+    }catch(e){ console.warn('[monthfix] 월간 채우기 실패',e); }
+  }
+  window.fillMonthly=fillMonthly;
+  if(typeof paint==='function'){
+    const _pa=paint;
+    window.paint=paint=function(){ fillMonthly(); return _pa.apply(this,arguments); };
+  }
+  fillMonthly();
+})();
+</script>
+
+<!-- ═══ 로딩 화면 동작 · 2026-10-08 ═══════════════════════════════════════
+     맨 위 #boot 를 서버 자료가 다 들어와 화면이 다시 그려진 뒤에 걷는다.
+     - 끝났는지는 #syncst 문구로 안다(serverSync 가 성공 「서버 · …」/실패 「서버 연결 실패」를 적는다).
+       감싸는 순서와 상관없이 잡히고, 뒤따르는 이력·검색 재구성(마이크로태스크)이 끝난 다음 틱에 걷는다.
+     - 진행: 다섯 묶음(회차·순위·도서·경로·언론) 중 몇 개를 받았는지 막대로 보여 준다.
+     - 12초가 넘으면 「파일 자료로 보기」를 함께 띄운다. 실패하면 「다시 시도」도.
+     - 「파일 쓰기」를 고른 기기(useServer 꺼짐)는 기다릴 서버가 없으니 바로 걷는다. -->
+<script id="boot1008js">
+(function(){
+  const el=document.getElementById('boot'); if(!el)return;
+  const root=document.documentElement;
+  const msg=el.querySelector('.bt-msg'), sub=el.querySelector('.bt-sub'), bar=el.querySelector('.bt-bar i');
+  const PARTS={rounds:'회차',entries:'순위',books:'도서',paths:'경로',press:'언론'};
+  const KEYS=Object.keys(PARTS);
+  let done=false, slowT=null, obs=null, got=new Set(), lastErr='';
+
+  function lift(){
+    if(done)return; done=true;
+    clearTimeout(slowT); if(obs)obs.disconnect();
+    // 다시 그린 결과가 화면에 올라온 뒤 걷는다
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{
+      el.classList.add('out'); root.classList.remove('booting');
+      setTimeout(()=>{ try{ el.remove(); }catch(e){} },450);
+    }));
+  }
+
+  let on=true; try{ on=!!getCfg().useServer; }catch(e){}
+  if(!on){ lift(); return; }
+
+  function fileLabel(){
+    try{ const d=(BASE&&BASE.daily)||[]; const l=d[d.length-1]; return l?l.label:''; }catch(e){ return ''; }
+  }
+  function step(){
+    if(done)return;
+    const n=got.size;
+    if(n){ el.classList.remove('indet'); bar.style.width=Math.round(8+n/KEYS.length*84)+'%'; }
+    if(!el.classList.contains('slow'))
+      msg.textContent=n<KEYS.length?'서버에서 순위 자료를 받는 중…':'화면을 준비하는 중…';
+    sub.innerHTML=KEYS.map(k=>got.has(k)?`<b>●</b> ${PARTS[k]}`:`○ ${PARTS[k]}`).join('&nbsp;&nbsp;');
+  }
+  function armSlow(){
+    clearTimeout(slowT);
+    slowT=setTimeout(()=>{ if(done)return;
+      el.classList.add('slow');
+      msg.textContent='평소보다 오래 걸립니다. 조금만 더 기다리시거나 파일 자료로 먼저 보실 수 있습니다.';
+    },12000);
+  }
+  function fail(){
+    if(done)return;
+    clearTimeout(slowT);
+    el.classList.remove('indet','slow'); el.classList.add('fail');
+    const fl=fileLabel();
+    msg.textContent='서버에서 자료를 받지 못했습니다.';
+    sub.textContent=(lastErr?lastErr+' · ':'')+(fl?`파일 자료는 ${fl}까지입니다`:'');
+  }
+  function retry(){
+    el.classList.remove('fail','slow'); el.classList.add('indet');
+    bar.style.width=''; got=new Set(); lastErr=''; step(); armSlow();
+    try{ serverSync(true); }catch(e){ lastErr=String(e&&e.message||e); fail(); }
+  }
+  el.querySelector('.bt-act').addEventListener('click',e=>{
+    const b=e.target.closest('button'); if(!b)return;
+    if(b.dataset.a==='retry')retry(); else lift();
+  });
+
+  // 받는 진행 — 다섯 묶음이 하나씩 들어올 때마다 막대를 민다
+  if(typeof sbGet==='function'){
+    const _g=sbGet;
+    window.sbGet=sbGet=function(path){
+      const p=_g.apply(this,arguments);
+      const k=String(path).split('?')[0];
+      if(!done&&PARTS[k])Promise.resolve(p).then(()=>{ got.add(k); step(); },
+        e=>{ lastErr=String(e&&e.message||e).slice(0,80); });
+      return p;
+    };
+  }
+
+  // 끝 — serverSync 가 상태 칸에 남기는 문구로 판단한다
+  const st=document.getElementById('syncst');
+  const check=()=>{
+    const t=(st&&st.textContent)||'';
+    if(/^서버 ·/.test(t)){ bar.style.width='100%'; setTimeout(lift,0); }
+    else if(/서버 연결 실패/.test(t))setTimeout(fail,0);
+  };
+  if(st){ obs=new MutationObserver(check);
+          obs.observe(st,{childList:true,characterData:true,subtree:true}); check(); }
+  else addEventListener('load',()=>setTimeout(lift,3000));   // 상태 칸이 없으면 기다릴 근거가 없다
+
+  // 시작 루틴은 캐시 복원·서지 발행일을 먼저 읽고서야 서버를 부른다. 그동안 놀지 않게 미리 받아 둔다.
+  // (srvfix1001 의 sbGet 기억 덕에 serverSync 가 같은 주소를 부르면 이 응답을 그대로 쓴다)
+  try{ ['rounds?select=*&order=y,m,d,w','entries?select=*&limit=100000','books?select=*&limit=100000',
+        'paths?select=*&limit=5000','press?select=*&limit=1000'].forEach(p=>sbGet(p).catch(()=>{})); }catch(e){}
+
+  step(); armSlow();
 })();
 </script>
 </body></html>
