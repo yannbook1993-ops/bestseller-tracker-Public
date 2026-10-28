@@ -6141,7 +6141,7 @@ const DRV=[
   ['series','시리즈·팬덤',/시리즈|권차|팬덤|전작|후속|회전문|만화|라이트노벨|IP/],
   ['launch','출간 초동·발행처',/예약|초동|출간 ?(전|직후|당일)|선주문|발행처|연속 투입|동시 (출간|등재|진입)/],
 ];
-const DLB={none:'미규명',etc:'기타 요인',nil:'미조사'}; DRV.forEach(d=>DLB[d[0]]=d[1]);
+const DLB={none:'요인 불명',etc:'기타 요인',nil:'조사 전'}; DRV.forEach(d=>DLB[d[0]]=d[1]);
 const TAGDRV={influencer:'media',author:'media',press:'press',bundle:'goods',storepromo:'store',event:'store',
   trend:'screen',institutional:'inst',award:'award',backlist:'series',classics:'trend'};
 const NONE_HEAD=/^\s*(기타|미확인|미검출)/, NONE_RE=/미검출|미확인|부재|규명 실패|특정 실패|단서 없음|계기 미확인/;
@@ -6210,12 +6210,12 @@ function noteOf(x,ref){
   const pd=pubDate(x), ag=age(pd,ref), P=pathOf(x.i), d=drvId(P);
   return {
     pd: pd?dDot(pd):'—',
-    ageT: ag==null?'':ag<0?`출간 ${-ag}일 전`:ag<=30?`신간 ${ag}일차`:ag<=365?`구간 ${Math.round(ag/30)}개월`:`구간 ${Math.floor(ag/365)}년차`,
+    ageT: ag==null?'':ag<0?`출간 ${-ag}일 전`:ag<=30?`출간 ${ag}일째`:ag<=365?`출간 ${Math.round(ag/30)}개월`:`출간 ${Math.floor(ag/365)}년`,
     rk: ST.map(s=>`${SA[s]} ${x[s]!=null?x[s]:'–'}`).join(' · '),
     sp: x.s!=null?`알 ${fmt(x.s)}`:'—',
     spr: (x.sr!=null&&x.sr!==0)?`${x.sr>0?'+':''}${Number(x.sr).toFixed(1)}%`:'',
     P, d, lb: DLB[d], st: P?P.s:'',
-    sum: P?sent(P.n1||P.n,130):'아직 조사하지 않은 책입니다.',
+    sum: P?sent(P.n1||P.n,130):'아직 요인을 조사하지 않았습니다.',
     nsrc: P&&Array.isArray(P.u)?P.u.length:0,
   };
 }
@@ -6228,22 +6228,22 @@ function picks(D,i){
     const why=[]; let sc=0;
     const P=pathOf(x.i), d=drvId(P);
     if(pm&&!pm.has(x.i)){ why.push(['신규 진입','up']); sc+=3; }
-    else if(pm){ const dl=pm.get(x.i).r-x.r; if(dl>=10){ why.push([`전 회차 대비 ▲${dl}`,'up']); sc+=2; } }
-    if(streak(x.i,D,i,'r')){ why.push(['3회차 연속 상승','up']); sc+=3; }
-    if(streak(x.i,D,i,'s')){ why.push(['판매지수 3회차 연속 증가','up']); sc+=2; }
+    else if(pm){ const dl=pm.get(x.i).r-x.r; if(dl>=10){ why.push([`전날보다 ▲${dl}`,'up']); sc+=2; } }
+    if(streak(x.i,D,i,'r')){ why.push(['3일 연속 상승','up']); sc+=3; }
+    if(streak(x.i,D,i,'s')){ why.push(['판매지수 3일 연속 증가','up']); sc+=2; }
     const on=ST.filter(s=>x[s]!=null);
-    if(on.length===1){ why.push([`${SN[on[0]]} 단독 등재`,'hi']); sc+=2; }
+    if(on.length===1){ why.push([`${SN[on[0]]}에만 있음`,'hi']); sc+=2; }
     else if(on.length>=2){
       const v=on.map(s=>x[s]);
       const b=on.reduce((a,s)=>x[s]<x[a]?s:a);
-      if(Math.max(...v)-Math.min(...v)>=25&&x[b]<=30){ why.push([`${SN[b]} 편중`,'hi']); sc+=1.5; }
+      if(Math.max(...v)-Math.min(...v)>=25&&x[b]<=30){ why.push([`${SN[b]}에서 강세`,'hi']); sc+=1.5; }
     }
     const ag=age(pubDate(x),ref);
-    if(ag!=null&&ag<0){ why.push([`출간 ${-ag}일 전 예약`,'']); sc+=1; }
-    else if(ag!=null&&ag<=30){ why.push([`신간 ${ag}일차`,'']); sc+=1; }
-    else if(ag!=null&&ag>365&&sc>=3){ why.push(['구간 재부상','up']); sc+=1.5; }
-    if(d==='nil'){ why.push(['견인 요인 미조사','q']); sc+=.5; }
-    else if(d==='none'||(P&&P.s==='미확인')){ why.push(['견인 요인 미규명','q']); sc+=.5; }
+    if(ag!=null&&ag<0){ why.push([`예약판매 중 (출간 ${-ag}일 전)`,'']); sc+=1; }
+    else if(ag!=null&&ag<=30){ why.push([`출간 ${ag}일째`,'']); sc+=1; }
+    else if(ag!=null&&ag>365&&sc>=3){ why.push(['구간 역주행','up']); sc+=1.5; }
+    if(d==='nil'){ why.push(['요인 조사 전','q']); sc+=.5; }
+    else if(d==='none'||(P&&P.s==='미확인')){ why.push(['요인 불명','q']); sc+=.5; }
     if(d==='inst')sc-=1.5;                                  // 시험서·교재는 제도 수요라 마케팅 참고 가치가 낮다
     if(sc>=2.5)out.push({x,why,sc});
   });
@@ -6268,7 +6268,7 @@ function bkCard(o,ref){
 function noteTable(cur,ref){
   return `<div class="bft-wrap"><table class="bft"><thead><tr>
       <th class="n">순위</th><th>도서 · 저자 · 출판사</th><th>출간일</th><th class="n">교 · 예 · 알</th>
-      <th class="n">판매지수</th><th>판매 견인 요인</th><th>판정</th><th>메모</th></tr></thead><tbody>
+      <th class="n">판매지수</th><th>판매 견인 요인</th><th>확인 수준</th><th>메모</th></tr></thead><tbody>
     ${cur.rows.map(x=>{ const n=noteOf(x,ref), m=memoGet(x.i);
       return `<tr data-i="${E(x.i)}"><td class="n">${x.r}</td>
         <td><b>${E(x.t)}</b><br><em>${E([x.au,x.p].filter(Boolean).join(' · '))}</em></td>
@@ -6365,9 +6365,9 @@ function rankAround(isbn,dateIso){
 }
 function rxText(isbn,dateIso){
   const {before,after}=rankAround(isbn,dateIso);
-  if(!after&&!before)return {t:'순위 기록 밖',c:''};
-  if(after&&!before)return {t:`→ ${after.r}위 진입`,c:'up'};
-  if(before&&!after)return {t:`${before.r}위 → 이후 미등재`,c:''};
+  if(!after&&!before)return {t:'순위권 밖',c:''};
+  if(after&&!before)return {t:`${after.r}위로 진입`,c:'up'};
+  if(before&&!after)return {t:`${before.r}위에서 순위권 밖으로`,c:''};
   return {t:`${before.r}위 → ${after.r}위`,c:after.r<before.r?'up':after.r>before.r?'dn':''};
 }
 function datedFacts(P){
@@ -6404,7 +6404,7 @@ async function paintBrief(){
   const body=Q('#bfbody'); if(!body)return;
   const D=D3(), i=curIdx(D);
   paintPicker(D,i);
-  if(i<0){ body.innerHTML='<div class="empty"><b>3사 일간 회차가 없습니다</b>서버 자료를 받은 뒤 다시 열어 주세요.</div>'; return; }
+  if(i<0){ body.innerHTML='<div class="empty"><b>3사 일간 자료가 없습니다</b>서버 자료를 받은 뒤 다시 열어 주세요.</div>'; return; }
   const my=++SEQ;
   try{
     if(BR.v==='pick')body.innerHTML=viewPick(D,i);
@@ -6418,21 +6418,21 @@ async function paintBrief(){
     }
   }catch(e){
     console.warn('[brief]',e);
-    body.innerHTML=`<div class="empty"><b>그리지 못했습니다</b>${E(e.message||e)}</div>`;
+    body.innerHTML=`<div class="empty"><b>화면을 그리지 못했습니다</b>${E(e.message||e)}</div>`;
   }
 }
 
 function viewPick(D,i){
   const cur=D[i], ref=rdD(cur), pk=picks(D,i), pv=i>0?D[i-1]:null;
-  return `<p class="bflead"><b>${rdDot(cur)}</b> 3사 통합 TOP 50 중 먼저 볼 책 <b>${pk.length}종</b>입니다.
-      신규 진입·3회차 연속 상승·서점 편중·신간·견인 요인 미규명 신호를 합산해 골랐습니다.
-      ${pv?`비교선은 직전 회차 ${rdDot(pv)}입니다.`:'직전 회차가 없어 신규·등락 신호는 빠졌습니다.'}</p>
-    ${pk.length?pk.map(o=>bkCard(o,ref)).join(''):'<div class="empty"><b>두드러진 신호가 없는 회차입니다</b></div>'}
-    <h3 class="bfsub">도서 노트 전체 <small>${cur.rows.length}종 · 마케터 열 구조</small></h3>
-    <p class="bfnote">판매지수는 알라딘 SalesPoint(「알」)입니다. 다른 서점 지수와 산식이 달라 크기를 견주지 않습니다.
-      증감률은 직전 회차 대비 한 번의 변화라 추세 판정에 쓰지 않습니다.</p>
+  return `<p class="bflead"><b>${rdDot(cur)}</b> 3사 통합 TOP 50에서 먼저 살펴볼 책 <b>${pk.length}종</b>을 골랐습니다.
+      새로 들어왔거나 며칠째 오르는 책, 한 서점에서만 강한 책, 갓 나온 책, 오른 이유를 아직 모르는 책에 점수를 더 줬습니다.
+      ${pv?`비교 기준일은 ${rdDot(pv)}입니다.`:'비교할 전날 자료가 없어 새로 들어온 책과 순위 변화는 빼고 골랐습니다.'}</p>
+    ${pk.length?pk.map(o=>bkCard(o,ref)).join(''):'<div class="empty"><b>눈에 띄는 움직임이 없는 날입니다</b></div>'}
+    <h3 class="bfsub">TOP 50 도서 노트 <small>${cur.rows.length}종</small></h3>
+    <p class="bfnote">판매지수는 알라딘 세일즈포인트(「알」)입니다. 예스24 판매지수와는 계산 방식이 달라 서로 비교할 수 없습니다.
+      괄호 안 증감률은 전날과 비교한 하루치 변화라서, 이것만으로 추세를 판단하면 안 됩니다.</p>
     ${noteTable(cur,ref)}
-    <div class="btnrow"><button class="btn" id="bfxls">엑셀로 받기 · 3사 나란히 + 도서 노트</button></div>`;
+    <div class="btnrow"><button class="btn" id="bfxls">엑셀로 받기 (3사 나란히 + 도서 노트)</button></div>`;
 }
 
 function viewSide(cur,sd){
@@ -6441,13 +6441,13 @@ function viewSide(cur,sd){
   let c3=0,c2=0; const solo={k:0,y:0,a:0};
   allI.forEach(i=>{ const on=ST.filter(s=>sets[s].has(i)); if(on.length===3)c3++; else if(on.length===2)c2++; else solo[on[0]]++; });
   const part=ST.filter(s=>sd.src[s]==='part');
-  const col=s=>`<div class="bsc"><h4>${SN[s]==='교보'?'교보문고':SN[s]}<small>${sd.src[s]==='full'?'종합 50위':'통합 TOP 50 안에서만'}</small></h4><ol>
+  const col=s=>`<div class="bsc"><h4>${SN[s]==='교보'?'교보문고':SN[s]}<small>${sd.src[s]==='full'?'종합 1~50위':'통합 TOP 50에 든 책만'}</small></h4><ol>
     ${sd[s].map(z=>{ const oth=ST.filter(o=>o!==s&&sets[o].has(z.i)); const isSolo=!oth.length;
       return `<li data-i="${E(z.i)}" class="${isSolo?'solo':''}${BR.hl===z.i?' hl':''}"><span class="r">${z.r}</span><span class="t">${E(z.t)}</span>
         <span class="m">${isSolo?'<b>단독</b>':oth.map(o=>SA[o]+' '+(sd[o].find(q=>q.i===z.i)||{}).r).join(' · ')}</span></li>`; }).join('')}
     </ol></div>`;
-  return `<p class="bflead"><b>${rdDot(cur)}</b> 세 서점의 종합 순위를 나란히 놓았습니다.
-      초록 줄은 <b>그 서점에만 있는 책</b>입니다 — 서점 단독 기획전·굿즈·펀딩을 먼저 의심할 자리입니다. 책을 누르면 세 목록에서 같은 책을 짚습니다.</p>
+  return `<p class="bflead"><b>${rdDot(cur)}</b> 세 서점 종합 순위를 나란히 보여 줍니다.
+      초록 줄은 <b>그 서점에만 오른 책</b>인데, 서점 단독 기획전이나 굿즈, 펀딩이 붙었을 가능성이 큽니다. 책을 누르면 다른 서점에서 몇 위인지 함께 보입니다.</p>
     <div class="bsum">
       <div><div class="k">3사 공통</div><div class="v">${c3}</div></div>
       <div><div class="k">2사 공통</div><div class="v">${c2}</div></div>
@@ -6455,8 +6455,8 @@ function viewSide(cur,sd){
     </div>
     <div class="bsinfo" id="bsinfo" hidden></div>
     <div class="bs3${BR.hl?' hlon':''}" id="bs3">${ST.map(col).join('')}</div>
-    ${part.length?`<p class="bfnote" style="padding-top:10px">${part.map(s=>SN[s]).join('·')}의 그날 종합 순위 원본을 받지 못해 3사 통합 TOP 50 안에 든 책만 보입니다. 단독·공통 수치는 그만큼 과소 집계입니다.</p>`
-      :'<p class="bfnote" style="padding-top:10px">비도서(ISBN 97x 외)는 뺐습니다. 서점마다 집계 기준·시각이 달라 같은 날이라도 순위를 직접 견주지 않습니다.</p>'}`;
+    ${part.length?`<p class="bfnote" style="padding-top:10px">${part.map(s=>SN[s]).join('·')} 자료는 그날 종합 순위 원본이 없어 3사 통합 TOP 50에 든 책만 보여 줍니다. 그래서 단독·공통 숫자가 실제보다 적게 나옵니다.</p>`
+      :'<p class="bfnote" style="padding-top:10px">굿즈나 음반처럼 책이 아닌 상품은 뺐습니다. 서점마다 집계 기준과 시각이 달라서, 같은 날이라도 순위 숫자를 그대로 비교하지는 마세요.</p>'}`;
 }
 function sideInfo(isbn){
   const box=Q('#bsinfo'); if(!box)return;
@@ -6465,7 +6465,7 @@ function sideInfo(isbn){
   const t=(ST.map(s=>sd[s].find(q=>q.i===isbn)).find(Boolean)||{}).t||titleOf(isbn);
   const d=drvId(pathOf(isbn));
   box.innerHTML=`<div style="min-width:0"><b>${E(t)}</b><br><span class="num">${E(r)}</span> · <span class="dtag d-${d}">${E(DLB[d])}</span></div>
-    <button class="btn ghost" data-open="${E(isbn)}">상세</button>`;
+    <button class="btn ghost" data-open="${E(isbn)}">자세히</button>`;
   box.hidden=false;
 }
 
@@ -6481,7 +6481,7 @@ function viewFactor(D,i){
     const apps=a.reduce((s,b)=>s+b.n,0), tri=a.reduce((s,b)=>s+b.tri,0);
     const sk={k:0,y:0,a:0}; a.forEach(b=>{ if(b.skew)sk[b.skew]++; });
     const skTop=ST.slice().sort((p,q)=>sk[q]-sk[p])[0];
-    return {k,lb:k==='_unk'?'미규명·미조사':DLB[k],n,stay,best,tri:pct(tri,apps),sk:sk[skTop]?`${SN[skTop]} ${sk[skTop]}종`:'—'};
+    return {k,lb:k==='_unk'?'요인 불명·조사 전':DLB[k],n,stay,best,tri:pct(tri,apps),sk:sk[skTop]?`${SN[skTop]} ${sk[skTop]}종`:'—'};
   }).sort((p,q)=>(p.k==='_unk')-(q.k==='_unk')||(q.n>=5)-(p.n>=5)||q.stay-p.stay);
   // Q2 서점 편중 도서의 요인
   const q2=ST.map(s=>{
@@ -6508,51 +6508,52 @@ function viewFactor(D,i){
   const recent=new Set(R.slice(-14).flatMap(rd=>rd.rows.map(x=>x.i)));
   const q5=books.filter(b=>!b.ok&&recent.has(b.i)).sort((p,q)=>q.n-p.n||p.best-q.best).slice(0,15);
 
-  const perBtn=[[30,'최근 30회차'],[90,'최근 90회차'],[0,'전체']]
+  const perBtn=[[30,'최근 30일'],[90,'최근 90일'],[0,'전체']]
     .map(([v,l])=>`<button data-per="${v}" aria-pressed="${BR.per===v}">${l}</button>`).join('');
   return `<div class="bfper" id="bfper">${perBtn}</div>
-    <p class="bflead">3사 통합 일간 <b>${R.length}회차</b>(${rdDot(from)} ~ ${rdDot(to)}) · 등장 도서 <b>${books.length}종</b> 중
-      판매 견인 요인이 확인·추정된 <b>${ok.length}종</b>으로 답합니다. 교보 단독 수집 구간은 섞지 않았습니다.
-      표본 5종 미만 유형은 흐리게 두고 판정하지 않습니다.</p>
+    <p class="bflead">${rdDot(from)}~${rdDot(to)} 3사 통합 순위에 오른 <b>${books.length}종</b> 가운데
+      판매 견인 요인을 확인했거나 추정할 수 있는 <b>${ok.length}종</b>을 바탕으로 답합니다. 책이 5종이 안 되는 유형은 흐리게 표시했습니다.</p>
 
-    <h3 class="bfsub">Q1. 어떤 판매 견인 요인이 순위를 오래 지키나</h3>
-    <p class="bfnote">체류 = 이 기간 통합 TOP 50 에 든 회차 수. 3사 동시 = 등장한 회차 중 세 서점 모두에 순위가 있던 비율.</p>
+    <h3 class="bfsub">Q1. 어떤 이유로 오른 책이 오래 버틸까</h3>
+    <p class="bfnote">체류는 이 기간에 통합 TOP 50에 머문 날수이고, 3사 동시는 그중 세 서점 수집 범위에 모두 오른 날의 비율입니다.
+      10월 29일 검정에서는 유형 사이에 통계적으로 의미 있는 차이가 나오지 않았으니, 순서는 참고만 하세요.</p>
     <div class="bft-wrap"><table class="bft sm"><thead><tr><th>판매 견인 요인</th><th class="n">도서</th><th class="n">평균 체류</th>
-      <th class="n">최고 순위 중앙값</th><th class="n">3사 동시</th><th>주 편중 서점</th></tr></thead><tbody>
+      <th class="n">최고 순위(중앙값)</th><th class="n">3사 동시</th><th>주로 강한 서점</th></tr></thead><tbody>
       ${rowsQ1.map(r=>`<tr class="${r.n<5?'thin':''}"><td><span class="dtag d-${r.k==='_unk'?'none':r.k}">${E(r.lb)}</span></td>
-        <td class="n">${r.n}</td><td class="n">${r.stay.toFixed(1)}회</td><td class="n">${r.best==null?'—':Math.round(r.best)+'위'}</td>
+        <td class="n">${r.n}</td><td class="n">${r.stay.toFixed(1)}일</td><td class="n">${r.best==null?'—':Math.round(r.best)+'위'}</td>
         <td class="n">${r.tri}%</td><td>${E(r.sk)}</td></tr>`).join('')}
     </tbody></table></div>
 
     <h3 class="bfsub">Q2. 왜 한 서점에서만 잘될까</h3>
-    <p class="bfnote">서점 편중 = 등장 회차의 80% 이상이 그 서점에 있고, 다른 두 서점에는 30% 이하인 책.</p>
-    ${q2.map(o=>`<div class="wkb"><h4>${SN[o.s]} 편중 <small>${o.n}종</small></h4>
+    <p class="bfnote">오른 날의 80% 이상을 한 서점에서만 보였고 다른 두 서점에서는 30% 이하였던 책을, 그 서점 강세 도서로 봤습니다.</p>
+    ${q2.map(o=>`<div class="wkb"><h4>${SN[o.s]} 강세 <small>${o.n}종</small></h4>
       ${o.n?`<p>${o.top.length?o.top.map(([k,v])=>`<b>${E(k)}</b> ${v}종`).join(' · '):'견인 요인이 확인된 책이 아직 없습니다'}
-          <span class="fl"> · 미규명·미조사 ${o.n-o.nOk}종</span></p>
-        <p style="margin-top:4px">${o.ex.map(b=>`『${E(b.t)}』`).join(', ')}</p>`:'<p>이 기간에는 편중 도서가 없습니다.</p>'}</div>`).join('')}
+          <span class="fl"> · 요인 불명·조사 전 ${o.n-o.nOk}종</span></p>
+        <p style="margin-top:4px">${o.ex.map(b=>`『${E(b.t)}』`).join(', ')}</p>`:'<p>이 기간에는 해당하는 책이 없습니다.</p>'}</div>`).join('')}
 
-    <h3 class="bfsub">Q3. 펀딩으로 오른 책은 얼마나 버티나 <small>${fund.length}종</small></h3>
-    ${fund.length?`<p class="bfnote">${fm.length?`펀딩 서점이 확인되고 서점 편중이 잡힌 ${fm.length}종 중 <b style="color:var(--ink)">${fmOk}종</b>이 펀딩한 서점에 편중됐습니다.`
-        :'펀딩 도서가 이 기간에는 한 서점에 치우치지 않았습니다(편중 기준 미충족).'}</p>
-      <div class="bft-wrap"><table class="bft sm"><thead><tr><th>도서</th><th>펀딩 서점</th><th class="n">체류</th><th class="n">최고</th><th>편중</th></tr></thead><tbody>
-      ${fund.slice(0,15).map(({b,fs})=>`<tr data-i="${E(b.i)}"><td><b>${E(b.t)}</b><br><em>${E(b.p)}</em></td><td>${fs?SN[fs]:'<em>미상</em>'}</td>
-        <td class="n">${b.n}회</td><td class="n">${b.best}위</td><td class="${fs&&fs===b.skew?'top':''}">${b.skew?SN[b.skew]:'<em>3사 고름</em>'}</td></tr>`).join('')}
-      </tbody></table></div>`:'<p class="bfnote">이 기간에 펀딩이 견인 요인으로 확인된 책이 없습니다.</p>'}
+    <h3 class="bfsub">Q3. 펀딩으로 오른 책은 얼마나 버틸까 <small>${fund.length}종</small></h3>
+    ${fund.length?`<p class="bfnote">${fm.length?`펀딩한 서점을 알고 한 서점에서 강세였던 ${fm.length}종 가운데 <b style="color:var(--ink)">${fmOk}종</b>은 펀딩한 바로 그 서점에서 강했습니다.`
+        :'이 기간 펀딩 도서는 어느 한 서점에 몰리지 않았습니다.'}</p>
+      <div class="bft-wrap"><table class="bft sm"><thead><tr><th>도서</th><th>펀딩 서점</th><th class="n">체류</th><th class="n">최고 순위</th><th>강한 서점</th></tr></thead><tbody>
+      ${fund.slice(0,15).map(({b,fs})=>`<tr data-i="${E(b.i)}"><td><b>${E(b.t)}</b><br><em>${E(b.p)}</em></td><td>${fs?SN[fs]:'<em>모름</em>'}</td>
+        <td class="n">${b.n}일</td><td class="n">${b.best}위</td><td class="${fs&&fs===b.skew?'top':''}">${b.skew?SN[b.skew]:'<em>고르게 팔림</em>'}</td></tr>`).join('')}
+      </tbody></table></div>`:'<p class="bfnote">이 기간에는 펀딩으로 오른 책이 없습니다.</p>'}
 
-    <h3 class="bfsub">Q4. 출판사는 어느 서점에서 강한가</h3>
-    <p class="bfnote">그 출판사 책이 통합 TOP 50 에 든 행 중 서점별 순위가 있는 비율입니다. 전체 평균은
-      교보 ${B0.k.toFixed(0)}% · 예스24 ${B0.y.toFixed(0)}% · 알라딘 ${B0.a.toFixed(0)}%. 평균보다 8%p 이상 높은 출판사만 보입니다(등장 8행·2종 이상).</p>
+    <h3 class="bfsub">Q4. 출판사마다 강한 서점이 따로 있을까</h3>
+    <p class="bfnote">통합 TOP 50에 오른 그 출판사 책이 각 서점 수집 범위에도 들어 있던 비율입니다.
+      전체 평균(교보 ${B0.k.toFixed(0)}%, 예스24 ${B0.y.toFixed(0)}%, 알라딘 ${B0.a.toFixed(0)}%)보다 8%p 이상 높은 출판사만 골랐습니다.
+      예스24는 수집 범위가 좁아 평균 자체가 낮으니 차이로만 보세요.</p>
     ${q4.length?`<div class="bft-wrap"><table class="bft sm"><thead><tr><th>출판사</th><th class="n">등장</th>${ST.map(s=>`<th class="n">${SN[s]}</th>`).join('')}<th>강한 서점</th></tr></thead><tbody>
       ${q4.map(o=>`<tr><td><b>${E(o.p.p)}</b> <em>${o.p.bk.size}종</em></td><td class="n">${o.p.n}</td>
         ${ST.map(s=>`<td class="n${s===o.best?' top':''}">${o.sh[s].toFixed(0)}%</td>`).join('')}<td>${SN[o.best]} +${o.lift.toFixed(0)}%p</td></tr>`).join('')}
       </tbody></table></div>`:'<p class="bfnote">평균에서 크게 벗어난 출판사가 없습니다.</p>'}
 
-    <h3 class="bfsub">Q5. 아직 이유를 모르는 책 <small>최근 14회차 · ${q5.length}종</small></h3>
-    <p class="bfnote">「미조사」는 아직 찾아보지 않은 것, 「미규명」은 찾아봤지만 경로가 나오지 않은 것입니다. 다음 조사 대상입니다.</p>
+    <h3 class="bfsub">Q5. 아직 이유를 모르는 책 <small>최근 14일 · ${q5.length}종</small></h3>
+    <p class="bfnote">「조사 전」은 아직 찾아보지 않은 책, 「요인 불명」은 찾아봤지만 이유가 나오지 않은 책입니다. 다음 조사 때 먼저 볼 목록입니다.</p>
     ${q5.length?`<div class="bft-wrap"><table class="bft sm"><thead><tr><th>도서</th><th class="n">체류</th><th class="n">최고</th><th>상태</th></tr></thead><tbody>
-      ${q5.map(b=>`<tr data-i="${E(b.i)}"><td><b>${E(b.t)}</b><br><em>${E(b.p)}</em></td><td class="n">${b.n}회</td><td class="n">${b.best}위</td>
-        <td><span class="dtag d-${b.d}">${E(b.P&&b.P.s==='미확인'&&b.d!=='none'?'미규명':DLB[b.d])}</span></td></tr>`).join('')}
-      </tbody></table></div>`:'<p class="bfnote">최근 등장 도서의 견인 요인이 모두 정리돼 있습니다.</p>'}`;
+      ${q5.map(b=>`<tr data-i="${E(b.i)}"><td><b>${E(b.t)}</b><br><em>${E(b.p)}</em></td><td class="n">${b.n}일</td><td class="n">${b.best}위</td>
+        <td><span class="dtag d-${b.d}">${E(b.P&&b.P.s==='미확인'&&b.d!=='none'?'요인 불명':DLB[b.d])}</span></td></tr>`).join('')}
+      </tbody></table></div>`:'<p class="bfnote">최근 오른 책은 모두 요인이 정리돼 있습니다.</p>'}`;
 }
 
 function viewWeek(D,i){
@@ -6567,8 +6568,8 @@ function viewWeek(D,i){
   pool.forEach(i=>{ const P=pathOf(i); (P&&P.tags||[]).forEach(t=>{ if(!META_TAG.test(t))tagC[t]=(tagC[t]||0)+1; }); });
   const tags=Object.entries(tagC).filter(([,v])=>v>=2).sort((a,b)=>b[1]-a[1]).slice(0,10);
   // 견인 요인 분포(신규 진입)
-  const dC={}; w.nw.forEach(i=>{ const P=pathOf(i); const k=usable(P)?DLB[drvId(P)]:'미규명·미조사'; dC[k]=(dC[k]||0)+1; });
-  const dPairs=Object.entries(dC).sort((a,b)=>(a[0]==='미규명·미조사')-(b[0]==='미규명·미조사')||b[1]-a[1]);
+  const dC={}; w.nw.forEach(i=>{ const P=pathOf(i); const k=usable(P)?DLB[drvId(P)]:'요인 불명·조사 전'; dC[k]=(dC[k]||0)+1; });
+  const dPairs=Object.entries(dC).sort((a,b)=>(a[0]==='요인 불명·조사 전')-(b[0]==='요인 불명·조사 전')||b[1]-a[1]);
   // 이슈 캘린더
   const from=new Date(w.s); from.setDate(from.getDate()-7);
   const ev=[];
@@ -6580,18 +6581,18 @@ function viewWeek(D,i){
   // 미해결
   const unk=w.nw.filter(i=>!usable(pathOf(i)));
   const area=(k,l,ph)=>`<label for="wn-${k}">${l}</label><textarea id="wn-${k}" data-k="${k}" placeholder="${E(ph)}">${E(note[k]||'')}</textarea>`;
-  return `<p class="bflead"><b>${lbl(w.s)} ~ ${lbl(w.end)}</b> 3사 일간 ${w.W.length}회차를 직전 주(${w.P.length}회차)와 견줘 초안을 만들었습니다.
-      자동으로 채운 칸 아래 내 메모를 더해 「텍스트로 복사」하면 마케터 일지 양식으로 붙여 넣을 수 있습니다.</p>
+  return `<p class="bflead"><b>${lbl(w.s)}~${lbl(w.end)}</b> 일주일(${w.W.length}일치)을 그 전 일주일과 비교해 초안을 만들었습니다.
+      아래 메모를 채우고 「텍스트로 복사」를 누르면 일지 양식 그대로 붙여 넣을 수 있습니다.</p>
     <div class="wk2">
-      <div><div class="k">등장 도서</div><div class="v">${w.WB.size}</div></div>
+      <div><div class="k">오른 책</div><div class="v">${w.WB.size}</div></div>
       <div><div class="k">새로 들어옴</div><div class="v">${w.P.length?w.nw.length:'—'}</div></div>
       <div><div class="k">빠짐</div><div class="v">${w.P.length?w.out.length:'—'}</div></div>
-      <div><div class="k">요인 미규명</div><div class="v">${w.P.length?unk.length:'—'}</div></div>
+      <div><div class="k">이유 모름</div><div class="v">${w.P.length?unk.length:'—'}</div></div>
     </div>
     <div class="wkgrid">
     <div class="wkb"><h4>수요 키워드</h4>
-      ${w.P.length?`<p>${up.length?up.map(x=>`<b>${E(x.g)}</b> +${x.d.toFixed(0)}%p`).join(' · '):'두드러지게 는 분야 없음'}
-        ${dn.length?`<br><span class="fl">줄어든 분야 · ${dn.map(x=>`${E(x.g)} ${x.d.toFixed(0)}%p`).join(' · ')}</span>`:''}</p>`:'<p>직전 주 회차가 없어 분야 변화를 잴 수 없습니다.</p>'}
+      ${w.P.length?`<p>${up.length?up.map(x=>`<b>${E(x.g)}</b> +${x.d.toFixed(0)}%p`).join(' · '):'눈에 띄게 늘어난 분야가 없습니다'}
+        ${dn.length?`<br><span class="fl">줄어든 분야 · ${dn.map(x=>`${E(x.g)} ${x.d.toFixed(0)}%p`).join(' · ')}</span>`:''}</p>`:'<p>지난주 자료가 없어 비교할 수 없습니다.</p>'}
       ${tags.length?`<p style="margin-top:6px">${tags.map(([t,v])=>`#${E(t)} <span class="fl">${v}</span>`).join('&nbsp; ')}</p>`:''}
     </div>
     <div class="wkb"><h4>판매 견인 요인 <small>새로 들어온 ${w.nw.length}종</small></h4>
@@ -6601,16 +6602,16 @@ function viewWeek(D,i){
       ${ev.length?`<ul>${ev.slice(0,14).map(e=>{ const rx=rxText(e.i,e.d);
         return `<li data-i="${E(e.i)}"><span class="dt">${e.d.slice(5).replace('-','/')}</span>${E(e.t.length>80?e.t.slice(0,79)+'…':e.t)}
           <br>『<b>${E(e.title)}</b>』<span class="rx ${rx.c}">${E(rx.t)}</span></li>`; }).join('')}</ul>`
-        :'<p>이 기간 날짜가 붙은 근거가 없습니다. 경로 조사의 facts 에 날짜가 있어야 여기에 올라옵니다.</p>'}
+        :'<p>이 기간에는 날짜가 기록된 사건이 없습니다.</p>'}
     </div>
     <div class="wkb"><h4>서점별 성격</h4><ul>
       ${sc.map(o=>`<li><b>${SN[o.s]}</b> · ${o.lift.length?o.lift.map(x=>`${E(x.g)} +${x.d.toFixed(0)}%p`).join(' · '):'평균과 비슷'}
-        <span class="fl">· 단독 ${o.solo}종</span></li>`).join('')}</ul>
-      <p class="fl" style="font-size:11px;margin-top:4px">그 서점에 순위가 있는 책의 분야 비중 − 3사 전체 비중. 3%p 이상만.</p>
+        <span class="fl">· 이 서점에만 ${o.solo}종</span></li>`).join('')}</ul>
+      <p class="fl" style="font-size:11px;margin-top:4px">그 서점에 오른 책의 분야 비중이 3사 평균보다 3%p 이상 높은 분야만 적었습니다.</p>
     </div>
-    <div class="wkb"><h4>미해결 질문 <small>견인 요인 미규명·미조사</small></h4>
-      ${unk.length?`<ul>${unk.slice(0,10).map(i=>{ const b=w.WB.get(i); return `<li data-i="${E(i)}">『<b>${E(b.x.t)}</b>』 <span class="fl">최고 ${b.best}위 · ${b.n}회 · ${E(b.x.p||'')}</span></li>`; }).join('')}</ul>`
-        :'<p>새로 들어온 책의 견인 요인이 모두 정리돼 있습니다.</p>'}
+    <div class="wkb"><h4>미해결 질문 <small>왜 올랐는지 아직 모르는 책</small></h4>
+      ${unk.length?`<ul>${unk.slice(0,10).map(i=>{ const b=w.WB.get(i); return `<li data-i="${E(i)}">『<b>${E(b.x.t)}</b>』 <span class="fl">최고 ${b.best}위 · ${b.n}일 · ${E(b.x.p||'')}</span></li>`; }).join('')}</ul>`
+        :'<p>새로 들어온 책은 모두 이유가 정리돼 있습니다.</p>'}
     </div>
     <div class="wkb" id="wknote"><h4>내 메모 <small>이 기기에만 저장</small></h4>
       ${area('insight','인사이트','예) 저자 채널이 있으면 1순위로 기획하기')}
@@ -6635,12 +6636,12 @@ function weekText(D,i){
   const unk=w.nw.filter(i=>!usable(pathOf(i))).slice(0,6).map(i=>`『${w.WB.get(i).x.t}』`);
   const L=(k,v)=>`**${k} | ${v||''}`;
   return [
-    `${lbl(w.s)}~${lbl(w.end)} 3사 베셀 읽기 (3사 일간 ${w.W.length}회차)`,
+    `${lbl(w.s)}~${lbl(w.end)} 3사 베셀 읽기 (${w.W.length}일치)`,
     L('수요 키워드',[gs.map(x=>`${x.g} +${x.d.toFixed(0)}%p`).join(', '),tags.map(t=>'#'+t).join(' ')].filter(Boolean).join(' / ')),
     L('이슈 or 이벤트',ev.slice(0,6).join(' / ')),
     L('판매 견인 요인',Object.entries(dC).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`${k} ${v}`).join(' · ')),
     L('서점별 성격',sc.join(' / ')),
-    L('미해결 질문',unk.length?unk.join(', ')+' — 견인 요인 미규명':''),
+    L('미해결 질문',unk.length?unk.join(', ')+' (요인 불명)':''),
     L('인사이트',note.insight), L('질문',note.question), L('읽고 싶은 책',note.read), L('콘텐츠 아이디어',note.idea),
   ].join('\n');
 }
@@ -6668,23 +6669,23 @@ async function exportXlsx(){
     const a1=[[`${rdDot(cur)} 3사 베스트셀러 (종합)`],[],['순위','교보문고','예스24','알라딘']];
     if(sd){ const mx=Math.max(...ST.map(s=>sd[s].length?sd[s][sd[s].length-1].r:0),50);
       for(let r=1;r<=Math.min(mx,50);r++)a1.push([r,...ST.map(s=>{ const z=sd[s].find(q=>q.r===r); return z?z.t:''; })]);
-      const part=ST.filter(s=>sd.src[s]==='part'); if(part.length)a1.push([],[`※ ${part.map(s=>SN[s]).join('·')}: 그날 종합 원본 미수신 — 3사 통합 TOP 50 안에 든 책만 표시`]);
+      const part=ST.filter(s=>sd.src[s]==='part'); if(part.length)a1.push([],[`※ ${part.map(s=>SN[s]).join('·')}: 그날 종합 순위 원본이 없어 3사 통합 TOP 50에 든 책만 표시`]);
     }
     const ws1=XLSX.utils.aoa_to_sheet(a1); ws1['!cols']=[{wch:6},{wch:36},{wch:36},{wch:36}];
     XLSX.utils.book_append_sheet(wb,ws1,'3사 나란히');
     const hd=['통합 순위','도서명','저자','출판사','분야','출간일','출간 경과','교보','예스24','알라딘',
-      '판매지수(알라딘)','판매지수 증감률(%)','판매 견인 요인','판정','근거 요약','출처','메모'];
+      '판매지수(알라딘)','판매지수 증감률(%)','판매 견인 요인','확인 수준','근거 요약','출처','메모'];
     const a2=[hd].concat(cur.rows.map(x=>{ const n=noteOf(x,ref), P=n.P;
       const src=P&&Array.isArray(P.u)?P.u.map(u=>Array.isArray(u)?u[1]:(u&&u.url)||u).filter(u=>/^https?:/.test(String(u))).join('\n'):'';
       return [x.r,x.t,x.au||'',x.p||'',x.g||'',n.pd,n.ageT,x.k??'',x.y??'',x.a??'',x.s??'',x.sr??'',
-        n.lb,n.st||'미조사',P?plain(P.n1||P.n):'',src,memoGet(x.i)]; }));
+        n.lb,n.st||'조사 전',P?plain(P.n1||P.n):'',src,memoGet(x.i)]; }));
     const ws2=XLSX.utils.aoa_to_sheet(a2);
     ws2['!cols']=[{wch:6},{wch:34},{wch:14},{wch:14},{wch:10},{wch:11},{wch:11},{wch:6},{wch:6},{wch:6},{wch:10},{wch:10},{wch:14},{wch:7},{wch:60},{wch:40},{wch:30}];
     ws2['!autofilter']={ref:`A1:Q${a2.length}`};
     XLSX.utils.book_append_sheet(wb,ws2,'도서 노트');
     XLSX.writeFile(wb,`TRACE_도서노트_${rd8(cur)}.xlsx`);
   }catch(e){ alert('엑셀을 만들지 못했습니다 · '+(e.message||e)); }
-  finally{ if(btn){ btn.disabled=false; btn.textContent='엑셀로 받기 · 3사 나란히 + 도서 노트'; } }
+  finally{ if(btn){ btn.disabled=false; btn.textContent='엑셀로 받기 (3사 나란히 + 도서 노트)'; } }
 }
 
 /* ── 11. 도서 상세 — 견인 요인 표기 · 사건·순위 타임라인 · 메모 ──────── */
@@ -6716,13 +6717,13 @@ function timeline(isbn){
     svg=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="순위와 사건 날짜">${g}</svg>`;
   }
   const h0=h.length?h[0].t:null, h1=h.length?h[h.length-1].t:null;
-  return `<h3 class="s">사건 · 순위 타임라인</h3><div class="tl">${svg}<ol>
+  return `<h3 class="s">사건과 순위 변화</h3><div class="tl">${svg}<ol>
     ${ev.map((e,k)=>{ const t=isoD(e.d), outR=!h0||t<h0-45*864e5||t>+h1+14*864e5, rx=rxText(isbn,e.d);
       return `<li class="${outR?'out':''}"><span class="no">${k+1}</span><span class="dt">${e.d.replace(/-/g,'.')}</span>
-        <span>${E(e.t)}<span class="rx ${rx.c}">${E(outR?'3사 통합 순위 기록 밖':rx.t)}</span></span></li>`; }).join('')}
+        <span>${E(e.t)}<span class="rx ${rx.c}">${E(outR?'순위 기록이 없는 시기':rx.t)}</span></span></li>`; }).join('')}
     </ol></div>
-    <p class="none">근거에 날짜가 붙은 사건만 올립니다. 순위는 3사 통합 일간 기준이며 사건 전후 14일 안의 기록으로 반응을 봅니다.
-      사건과 순위가 같이 움직였다고 인과가 확인된 것은 아닙니다.</p>`;
+    <p class="none">날짜가 기록된 사건만 표시합니다. 순위는 3사 통합 일간 기준이고, 사건 전후 14일 안의 순위로 반응을 봅니다.
+      함께 움직였다고 해서 그 사건 때문이라고 단정할 수는 없습니다.</p>`;
 }
 function enhanceBook(isbn){
   const body=Q('#sheetbody'); if(!body||!isbn)return;
@@ -6752,7 +6753,7 @@ if(typeof pathCard==='function'){
     const h=_pc.apply(this,arguments), d=drvId(pathOf(isbn));
     return String(h)
       .replace('<span class="tagbox">마케팅 분석</span>',`<span class="tagbox">판매 견인 요인</span><span class="dtag d-${d}">${E(DLB[d])}</span>`)
-      .replace('마케팅 분석 · 미조사','판매 견인 요인 · 미조사');
+      .replace('마케팅 분석 · 미조사','판매 견인 요인 · 조사 전');
   };
 }
 if(typeof paintBook==='function'){
