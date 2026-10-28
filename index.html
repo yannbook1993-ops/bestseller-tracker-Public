@@ -1002,6 +1002,24 @@ html.booting,html.booting body{overflow:hidden}
     <div id="newbody"></div>
   </section>
 
+  <!-- 마켓 브리핑 · 2026-10-28 — 동작은 맨 아래 brief1028js -->
+  <section id="v-brief" hidden>
+    <div class="bfh">
+      <div class="ctl bfseg" id="bfseg">
+        <button data-b="pick" aria-selected="true">주목 도서</button>
+        <button data-b="side" aria-selected="false">3사 비교</button>
+        <button data-b="factor" aria-selected="false">요인 분석</button>
+        <button data-b="week" aria-selected="false">주간 회고</button>
+      </div>
+      <div class="bfpick">
+        <select id="bfday" aria-label="기준일"></select>
+        <span class="base">3사 일간 기준</span>
+        <div class="arw"><button id="bfprev" aria-label="이전 회차">‹</button><button id="bfnext" aria-label="다음 회차">›</button></div>
+      </div>
+    </div>
+    <div id="bfbody"></div>
+  </section>
+
   <section id="v-report" hidden><div id="report"></div></section>
 
   <section id="v-search" hidden>
@@ -1069,6 +1087,7 @@ html.booting,html.booting body{overflow:hidden}
 
 <nav class="tabbar"><div id="nav">
   <button data-v="rank" aria-selected="true"><svg viewBox="0 0 24 24"><path d="M4 19V10M10 19V5M16 19v-6M22 19H2"/></svg>순위</button>
+  <button data-v="brief" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M9 18h6M10 21h4M12 3a6 6 0 00-3.5 10.9c.6.5 1 1.2 1 2V16h5v-.1c0-.8.4-1.5 1-2A6 6 0 0012 3z"/></svg>브리핑</button>
   <button data-v="new" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>신규 진입</button>
   <button data-v="report" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>분석 리포트</button>
   <button data-v="event" aria-selected="false" class="hastmp"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span>이벤트<i class="tmp">임시</i></span></button>
@@ -3444,7 +3463,7 @@ async function serverSync(quiet){
       sbGet('rounds?select=*&order=y,m,d,w'),
       sbGet('entries?select=*&limit=100000'),
       sbGet('books?select=*&limit=100000'),
-      sbGet('paths?select=*&limit=5000'),
+      sbGet('paths?select=*&limit=50000'),
       sbGet('press?select=*&limit=1000'),
     ]);
     if(!rounds.length)throw new Error('서버에 회차가 없습니다');
@@ -5926,9 +5945,861 @@ html.ui-settled .ui-enter .row:nth-child(n+9){animation-delay:120ms!important}
   // 시작 루틴은 캐시 복원·서지 발행일을 먼저 읽고서야 서버를 부른다. 그동안 놀지 않게 미리 받아 둔다.
   // (srvfix1001 의 sbGet 기억 덕에 serverSync 가 같은 주소를 부르면 이 응답을 그대로 쓴다)
   try{ ['rounds?select=*&order=y,m,d,w','entries?select=*&limit=100000','books?select=*&limit=100000',
-        'paths?select=*&limit=5000','press?select=*&limit=1000'].forEach(p=>sbGet(p).catch(()=>{})); }catch(e){}
+        'paths?select=*&limit=50000','press?select=*&limit=1000'].forEach(p=>sbGet(p).catch(()=>{})); }catch(e){}
 
   step(); armSlow();
 })();
 </script>
+
+<!-- ═══ 마켓 브리핑 · 2026-10-28 ═══════════════════════════════════════════
+     출판 마케터의 「베셀 3사 일기」 작업 방식을 화면으로 옮겼다.
+       ① 3사 비교   — 교보·예스24·알라딘 TOP 50 을 나란히. 같은 책을 잇고 단독 등재를 드러낸다.
+       ② 주목 도서  — 마케터가 손으로 고르던 「오늘 볼 책」을 신호(신규·연속 상승·서점 편중·신간·미규명)로 먼저 고른다.
+                      한 권은 마케터 열 구조(출간일·서점 순위·판매지수·판매 견인 요인)로 보인다. 마케터 양식 엑셀로 받는다.
+       ③ 요인 분석  — 마케터가 적어 두던 질문(「왜 이 서점에서만?」「펀딩하면 오래 가나?」)에 쌓인 경로 자료로 답한다.
+       ④ 주간 회고  — 수요 키워드·이슈 캘린더·판매 견인 요인 분포·서점별 성격·미해결 질문 초안 + 내 메모.
+       ⑤ 도서 상세  — 판매 견인 요인 유형 표기, 사건·순위 타임라인(날짜 붙은 근거를 순위 위에 겹침), 비고 메모.
+     용어: 「왜 떴어?」 → 「판매 견인 요인」. 유형은 paths.kind 를 14개로 정규화한다(DRV 표).
+     판정 규칙은 기존 원칙을 따른다 — 단일 회차로 급등을 말하지 않고(3회차 연속만), 판매지수는 알라딘 값임을 표기하며,
+     3사 통합 일간 회차(src 없음)만 쓴다. 교보 단독 수집 구간은 섞지 않는다.
+     원래 코드는 건드리지 않고 paint·go·pathCard·paintBook 을 감싸기만 한다. ═════════════════════ -->
+<style id="brief1028">
+.tabbar div{grid-template-columns:repeat(5,1fr)}
+#v-brief{padding-bottom:28px}
+.bfh{padding-top:12px}
+.bfseg{margin:0 16px 2px}
+.bfpick{display:flex;align-items:center;gap:6px;padding:11px 16px 6px}
+.bfpick select{appearance:none;background:var(--raise) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M1 1l4 4 4-4' stroke='%239c9ca6' stroke-width='1.5' fill='none' stroke-linecap='round'/></svg>") no-repeat right 10px center;
+  border:1px solid var(--line);color:var(--ink);border-radius:14px;padding:7px 27px 7px 11px;font-size:13.5px}
+.bfpick select:focus{outline:none;border-color:var(--gr)}
+.bfpick .base{color:var(--faint);font-size:12px}
+.bfpick .arw{margin-left:auto;display:flex;gap:5px}
+.bfpick .arw button{background:var(--raise);border:1px solid var(--line);color:var(--dim);
+  border-radius:14px;width:31px;height:31px;font-size:14px}
+.bfpick .arw button:disabled{opacity:.3}
+.bflead{padding:8px 16px 10px;font-size:12.5px;color:var(--dim);line-height:1.75}
+.bflead b{color:var(--ink)}
+.bfsub{font-size:14px;color:var(--ink);font-weight:700;padding:20px 16px 4px;letter-spacing:-.2px}
+.bfsub small{font-weight:500;color:var(--faint);font-size:11.5px;margin-left:6px}
+.bfnote{color:var(--faint);font-size:11.5px;padding:2px 16px 10px;line-height:1.65}
+
+/* 주목 도서 카드 — 마케터 열 구조 */
+.bk{background:var(--surf);border-radius:14px;margin:0 16px 10px;padding:13px 14px;cursor:pointer}
+.bk:hover{background:var(--raise)}
+.bk header{display:flex;gap:10px;align-items:flex-start}
+.bkr{font:800 17px/1.3 var(--mono);color:var(--dim);min-width:26px}
+.bkr.t3{color:var(--gr)}
+.bkt{min-width:0;flex:1}
+.bkt b{display:block;font-size:14px;font-weight:700;line-height:1.4}
+.bkt i{display:block;font-style:normal;font-size:11.5px;color:var(--faint);margin-top:2px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bkw{display:flex;flex-wrap:wrap;gap:5px;margin:9px 0 0 36px}
+.bw{font-size:11px;padding:2px 8px;border-radius:10px;background:var(--raise);color:var(--dim);border:1px solid var(--line);white-space:nowrap}
+.bw.up{color:var(--up);border-color:rgba(245,69,92,.35)}
+.bw.hi{color:var(--gr);border-color:rgba(34,224,138,.35)}
+.bw.q{color:#f2d08b;border-color:rgba(242,208,139,.35)}
+.bkn{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:10px 0 0 36px}
+.bkn div{background:var(--bg);border-radius:10px;padding:6px 9px;min-width:0}
+.bkn dt{font-size:10px;color:var(--faint)}
+.bkn dd{font-size:12px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bkd{margin:9px 0 0 36px;font-size:12.5px;color:var(--dim);line-height:1.65}
+.bkd p{margin-top:5px}
+.dtag{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;
+  background:rgba(34,224,138,.12);color:var(--gr);margin-right:5px;white-space:nowrap}
+.dtag.d-none,.dtag.d-nil,.dtag.d-etc{background:var(--raise);color:var(--faint)}
+.dst{display:inline-block;font-size:10.5px;padding:2px 7px;border-radius:10px;background:var(--raise);color:var(--dim);white-space:nowrap}
+.dst.ok{color:var(--gr)} .dst.unk{color:var(--up)}
+@media (max-width:420px){ .bkw,.bkn,.bkd{margin-left:0} .bkn{grid-template-columns:1fr 1fr} .bkn div:last-child{grid-column:1/-1} }
+
+/* 표 */
+.bft-wrap{overflow-x:auto;margin:0 16px;border:1px solid var(--line);border-radius:14px;-webkit-overflow-scrolling:touch}
+table.bft{border-collapse:collapse;width:100%;min-width:760px;font-size:12px}
+table.bft.sm{min-width:0}
+table.bft th{background:var(--raise);color:var(--faint);font-weight:600;font-size:10.5px;padding:8px 9px;text-align:left;white-space:nowrap}
+table.bft td{padding:8px 9px;border-top:1px solid var(--line);vertical-align:top;color:var(--dim);line-height:1.55}
+table.bft td.n,table.bft th.n{text-align:right;font-family:var(--mono);white-space:nowrap}
+table.bft td b{color:var(--ink);font-weight:600}
+table.bft td em{font-style:normal;color:var(--faint);font-size:11px}
+table.bft tr[data-i]{cursor:pointer}
+table.bft tr[data-i]:hover td{background:rgba(255,255,255,.025)}
+table.bft tr.thin td{opacity:.55}
+table.bft td.top{color:var(--gr);font-weight:700}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap;padding:12px 16px 4px}
+
+/* 3사 비교 */
+.bs3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;padding:0 10px}
+.bsc{background:var(--surf);border-radius:12px;padding:8px 0 4px;min-width:0}
+.bsc h4{font-size:12.5px;padding:2px 10px 8px;color:var(--ink);border-bottom:1px solid var(--line)}
+.bsc h4 small{display:block;font-weight:400;color:var(--faint);font-size:10px;margin-top:1px}
+.bsc ol{list-style:none}
+.bsc li{display:grid;grid-template-columns:22px minmax(0,1fr);column-gap:4px;padding:5px 8px 5px 6px;
+  font-size:11.5px;line-height:1.35;cursor:pointer;border-left:2px solid transparent}
+.bsc li .r{color:var(--faint);font-family:var(--mono);font-size:11px;text-align:right;padding-right:2px}
+.bsc li .t{overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;color:var(--dim);word-break:keep-all}
+.bsc li .m{grid-column:2;font-size:9.5px;color:var(--faint);letter-spacing:.02em}
+.bsc li.solo{border-left-color:var(--gr)}
+.bsc li.solo .t{color:var(--ink)}
+.bsc li .m b{color:var(--gr);font-weight:700}
+.bs3.hlon li{opacity:.3}
+.bs3.hlon li.hl{opacity:1;background:rgba(34,224,138,.12)}
+.bsinfo{margin:0 16px 10px;background:var(--surf);border:1px solid var(--grd);border-radius:14px;padding:10px 13px;
+  display:flex;gap:10px;align-items:center;font-size:12.5px;color:var(--dim)}
+.bsinfo[hidden]{display:none}
+.bsinfo b{color:var(--ink)}
+.bsinfo .btn{margin-left:auto;flex-shrink:0}
+.bsum{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:5px;padding:0 16px 12px}
+.bsum div{background:var(--surf);border-radius:12px;padding:7px 2px;text-align:center;min-width:0}
+.bsum .k{font-size:10px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bsum .v{font:800 15px/1.3 var(--mono);color:var(--ink)}
+@media (max-width:420px){ .bs3{gap:4px;padding:0 6px}
+  .bsc li{font-size:11px;padding:5px 5px 5px 3px} .bsc li .r{font-size:10px} }
+
+/* 가로 막대 */
+.hb{display:grid;grid-template-columns:96px minmax(0,1fr) 64px;gap:8px;align-items:center;padding:3px 16px;font-size:12px}
+.hb .l{color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hb .b{height:8px;background:var(--raise);border-radius:6px;overflow:hidden}
+.hb .b i{display:block;height:100%;background:var(--gr);border-radius:6px}
+.hb .v{text-align:right;font-family:var(--mono);color:var(--ink)}
+.hb .v em{font-style:normal;color:var(--faint);font-size:10.5px;margin-left:3px}
+.bfper{display:flex;gap:5px;padding:6px 16px 2px}
+.bfper button{border:1px solid var(--line);background:var(--raise);color:var(--dim);border-radius:14px;padding:5px 11px;font-size:12px;font-weight:600}
+.bfper button[aria-pressed="true"]{background:var(--gr);border-color:var(--gr);color:#062012}
+
+/* 주간 회고 */
+.wkb{background:var(--surf);border-radius:14px;margin:0 16px 10px;padding:12px 14px}
+.wkb h4{font-size:12.5px;color:var(--gr);margin-bottom:6px;font-weight:700}
+.wkb h4 small{color:var(--faint);font-weight:500;margin-left:5px}
+.wkb p{font-size:12.5px;color:var(--dim);line-height:1.75}
+.wkb p b{color:var(--ink)}
+.wkb ul{list-style:none}
+.wkb li{font-size:12.5px;color:var(--dim);line-height:1.6;padding:6px 0;border-top:1px solid var(--line)}
+.wkb li:first-child{border-top:none}
+.wkb li[data-i]{cursor:pointer}
+.wkb li .dt{font-family:var(--mono);color:var(--faint);font-size:11px;margin-right:6px}
+.wkb li b{color:var(--ink);font-weight:600}
+.wkb .rx{font-family:var(--mono);font-size:11px;color:var(--faint);margin-left:4px}
+.wkb .rx.up{color:var(--up)} .wkb .rx.dn,.tl li .rx.dn{color:var(--dn)}
+.wkb label{display:block;font-size:11.5px;color:var(--faint);margin:8px 0 4px}
+.wkb textarea,.bmemo textarea{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:10px;color:var(--ink);
+  font:inherit;font-size:12.5px;padding:8px 10px;resize:vertical;min-height:52px;line-height:1.6}
+.wkb textarea:focus,.bmemo textarea:focus{outline:none;border-color:var(--gr)}
+.wk2{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;padding:0 16px 10px}
+.wk2 div{background:var(--surf);border-radius:12px;padding:9px 6px;text-align:center}
+.wk2 .k{font-size:10px;color:var(--faint)} .wk2 .v{font:800 16px/1.3 var(--mono)}
+.okmsg{font-size:11.5px;color:var(--gr);padding:4px 16px}
+
+/* 도서 상세 — 타임라인·메모 */
+.tl{margin:4px 16px 6px;background:var(--surf);border-radius:14px;padding:10px 12px 8px}
+.tl svg{width:100%;height:auto;display:block}
+.tl ol{list-style:none;margin-top:6px}
+.tl li{font-size:12px;color:var(--dim);line-height:1.6;padding:5px 0;border-top:1px solid var(--line);display:grid;grid-template-columns:20px 74px minmax(0,1fr);gap:6px}
+.tl li .no{font:700 10.5px/1.6 var(--mono);color:#f2d08b}
+.tl li .dt{font-family:var(--mono);font-size:11px;color:var(--faint)}
+.tl li .rx{display:block;font-family:var(--mono);font-size:10.5px;color:var(--faint)}
+.tl li .rx.up{color:var(--up)}
+.tl li.out{opacity:.6}
+.bmemo{margin:8px 16px 4px}
+.bmemo label{display:flex;justify-content:space-between;font-size:11.5px;color:var(--faint);margin-bottom:4px}
+
+@media (min-width:900px){
+  .tabbar div{display:block}
+  #v-brief{max-width:960px}
+  .bfseg{margin:0 24px 2px} .bfpick,.bflead,.bfsub,.bfnote,.btnrow,.bfper,.hb{padding-left:24px;padding-right:24px}
+  .bk,.wkb,.bft-wrap,.bsinfo{margin-left:24px;margin-right:24px}
+  .bsum,.wk2{padding-left:24px;padding-right:24px}
+  .bs3{padding:0 24px;gap:8px}
+  .bsc li{font-size:12.5px}
+  .hb{grid-template-columns:150px minmax(0,1fr) 74px}
+  .wkgrid{display:grid;grid-template-columns:1fr 1fr;gap:0 0;padding:0 8px}
+  .wkgrid .wkb{margin-left:16px;margin-right:16px}
+}
+</style>
+<script id="brief1028js">
+(function(){
+'use strict';
+if(typeof DB==='undefined'||typeof SETS==='undefined'||typeof paint!=='function')return;
+const Q=s=>document.querySelector(s);
+const E=s=>esc(s);
+const SN={k:'교보',y:'예스24',a:'알라딘'}, SA={k:'교',y:'예',a:'알'}, ST=['k','y','a'];
+const SHOPCODE={k:['kyobo','A'],y:['yes24','001'],a:['aladin','0']};
+
+/* ── 1. 판매 견인 요인 — paths.kind 를 14개 유형으로 ───────────────────
+   kind 머리(— 앞)를 먼저 본다. 머리가 「기타·미확인」이면 꼬리를 본다.
+   2026-10-28 실제 경로 6,002건에 맞춰 순서를 정했다(라이트노벨≠노벨, 「바로펀딩 부재 확인」≠펀딩). */
+const DRV=[
+  ['fund','펀딩',/펀딩|북펀드|그래제본소|크라우드|텀블벅|와디즈/i],
+  ['award','수상·선정',/수상|문학상|노벨 ?문학|노벨상|선정|이달의|award|권장도서|추천도서/i],
+  ['screen','영상화',/영상화|드라마|영화|극장판|애니메이션|넷플릭스|OTT|대본집/i],
+  ['tv','방송 노출',/방송|예능|유퀴즈|라디오|TV|뉴스공장/i],
+  ['issue','이슈·시의성',/작가 ?이슈|별세|타계|추모|논란|시의성|시사|광복절|계엄|탄핵|선거|기념일|주기|참사/i],
+  ['media','저자 매체',/저자 ?미디어|저자 ?채널|유튜브|인터뷰|강연|북토크|인플루언서|influencer|저자 ?브랜드|편역자/i],
+  ['goods','상품 구성',/특전|한정|굿즈|부록|사은품|에디션|bundle|번들|리커버|기념판|세트|합본|리패키징|개정판|특별판/i],
+  ['store','서점 기획·MD',/서점 ?기획|기획전|MD|단독|올재|storepromo|이벤트/i],
+  ['press','언론·SNS 확산',/언론|서평|보도|SNS|인스타|트위터|틱톡|숏폼|커뮤니티|입소문|바이럴|press|칼럼|간담회/i],
+  ['trend','시장 트렌드',/trend|트렌드|열풍|붐|역주행|수요 급증/i],
+  ['inst','제도·시즌 수요',/시험|수험|제도|교재|교과|연도판|정기간행물|구독|institutional|자격|채용|입시|학습|문제집|개강/i],
+  ['series','시리즈·팬덤',/시리즈|권차|팬덤|전작|후속|회전문|만화|라이트노벨|IP/],
+  ['launch','출간 초동·발행처',/예약|초동|출간 ?(전|직후|당일)|선주문|발행처|연속 투입|동시 (출간|등재|진입)/],
+];
+const DLB={none:'미규명',etc:'기타 요인',nil:'미조사'}; DRV.forEach(d=>DLB[d[0]]=d[1]);
+const TAGDRV={influencer:'media',author:'media',press:'press',bundle:'goods',storepromo:'store',event:'store',
+  trend:'screen',institutional:'inst',award:'award',backlist:'series',classics:'trend'};
+const NONE_HEAD=/^\s*(기타|미확인|미검출)/, NONE_RE=/미검출|미확인|부재|규명 실패|특정 실패|단서 없음|계기 미확인/;
+const pathOf=i=>(DB.paths||{})[i]||null;
+function drvId(P){
+  if(!P)return 'nil';
+  if(P._dk===P.k&&P._d)return P._d;
+  const k=String(P.k||''), head=k.split('—')[0];
+  let d;
+  if(!k.trim()||/확인 ?불가/.test(k)||/^\s*미확인\s*$/.test(k))d='none';
+  else{
+    const tail=NONE_HEAD.test(head);
+    const probe=tail?k.slice(head.length+1):head;
+    if(tail&&NONE_RE.test(probe))d='none';
+    else{
+      let hit=DRV.find(x=>x[2].test(probe));
+      if(!hit&&!tail)hit=DRV.find(x=>x[2].test(k));
+      if(hit)d=hit[0];
+      else{
+        const t=(P.tags||[]).find(t=>TAGDRV[t]);
+        d=t?TAGDRV[t]:(tail&&/미검출|미확인/.test(probe)?'none':'etc');
+      }
+    }
+  }
+  P._dk=P.k; P._d=d; return d;
+}
+/** 분석에 써도 되는 경로인가 — 확인·추정이고 유형이 잡힌 것만 */
+const usable=P=>!!P&&(P.s==='확인'||P.s==='추정')&&!['none','nil'].includes(drvId(P));
+const STC={'확인':'ok','추정':'est','미확인':'unk'};
+const plain=h=>String(h||'').replace(/<[^>]+>/g,'').replace(/&nbsp;/g,' ').replace(/\s+/g,' ').trim();
+function sent(h,n){
+  const s=plain(h); if(!s)return '';
+  const m=s.match(/^(.+?(?:다|요|음|함)\.)(?:\s|$)/);
+  let t=m?m[1]:s; n=n||120;
+  return t.length>n?t.slice(0,n-1)+'…':t;
+}
+
+/* ── 2. 회차 도우미 — 3사 통합 일간만 ─────────────────────────────── */
+const D3=()=>(SETS.daily||[]).filter(r=>!r.src&&r.rows&&r.rows.length);
+const rd8=r=>`${r.y}${r.m}${r.d}`;
+const rdD=r=>new Date(+r.y,+r.m-1,+r.d);
+const rdDot=r=>`${r.y}.${r.m}.${r.d}`;
+const dDot=s=>s&&s.length>=8?`${s.slice(0,4)}.${s.slice(4,6)}.${s.slice(6,8)}`:'';
+const isoD=s=>{ const [y,m,d]=s.split('-'); return new Date(+y,+m-1,+d); };
+const dayDiff=(a,b)=>Math.round((a-b)/864e5);
+const RM=new WeakMap();
+function rowMap(rd){ let m=RM.get(rd); if(!m){ m=new Map(); (rd.rows||[]).forEach(x=>x.i&&m.set(x.i,x)); RM.set(rd,m); } return m; }
+/** 직전 3회차 연속 같은 방향인가 (원칙 2). key='r' 이면 순위 상승, 's' 면 판매지수 증가 */
+function streak(isbn,D,i,key){
+  if(i<3)return false;
+  const v=[];
+  for(let j=i-3;j<=i;j++){ const x=rowMap(D[j]).get(isbn); if(!x||x[key]==null)return false; v.push(x[key]); }
+  return key==='r'?(v[0]>v[1]&&v[1]>v[2]&&v[2]>v[3]):(v[0]<v[1]&&v[1]<v[2]&&v[2]<v[3]);
+}
+const titleOf=i=>{ const b=(DB.hist||{})[i]; return b&&b.t||''; };
+
+/* ── 3. 메모 (이 기기에만) ──────────────────────────────────────── */
+const MEMO_K='trace.memo', WK_K='trace.weeknote.';
+const lsGet=(k,d)=>{ try{ const v=JSON.parse(localStorage.getItem(k)); return v==null?d:v; }catch(e){ return d; } };
+const lsSet=(k,v)=>{ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} };
+const memoGet=i=>(lsGet(MEMO_K,{})||{})[i]||'';
+function memoSet(i,v){ const m=lsGet(MEMO_K,{})||{}; if(v&&v.trim())m[i]=v; else delete m[i]; lsSet(MEMO_K,m); }
+
+/* ── 4. 도서 노트 한 줄 — 마케터 열 구조 ────────────────────────────── */
+function noteOf(x,ref){
+  const pd=pubDate(x), ag=age(pd,ref), P=pathOf(x.i), d=drvId(P);
+  return {
+    pd: pd?dDot(pd):'—',
+    ageT: ag==null?'':ag<0?`출간 ${-ag}일 전`:ag<=30?`신간 ${ag}일차`:ag<=365?`구간 ${Math.round(ag/30)}개월`:`구간 ${Math.floor(ag/365)}년차`,
+    rk: ST.map(s=>`${SA[s]} ${x[s]!=null?x[s]:'–'}`).join(' · '),
+    sp: x.s!=null?`알 ${fmt(x.s)}`:'—',
+    spr: (x.sr!=null&&x.sr!==0)?`${x.sr>0?'+':''}${Number(x.sr).toFixed(1)}%`:'',
+    P, d, lb: DLB[d], st: P?P.s:'',
+    sum: P?sent(P.n1||P.n,130):'아직 조사하지 않은 책입니다.',
+    nsrc: P&&Array.isArray(P.u)?P.u.length:0,
+  };
+}
+
+/* ── 5. 주목 도서 고르기 ─────────────────────────────────────────── */
+function picks(D,i){
+  const cur=D[i], pv=i>0?D[i-1]:null, pm=pv?rowMap(pv):null, ref=rdD(cur), out=[];
+  cur.rows.forEach(x=>{
+    if(!x.i||/^977/.test(x.i))return;                      // 정기간행물은 시장 신호에서 뺀다 (원칙 5)
+    const why=[]; let sc=0;
+    const P=pathOf(x.i), d=drvId(P);
+    if(pm&&!pm.has(x.i)){ why.push(['신규 진입','up']); sc+=3; }
+    else if(pm){ const dl=pm.get(x.i).r-x.r; if(dl>=10){ why.push([`전 회차 대비 ▲${dl}`,'up']); sc+=2; } }
+    if(streak(x.i,D,i,'r')){ why.push(['3회차 연속 상승','up']); sc+=3; }
+    if(streak(x.i,D,i,'s')){ why.push(['판매지수 3회차 연속 증가','up']); sc+=2; }
+    const on=ST.filter(s=>x[s]!=null);
+    if(on.length===1){ why.push([`${SN[on[0]]} 단독 등재`,'hi']); sc+=2; }
+    else if(on.length>=2){
+      const v=on.map(s=>x[s]);
+      const b=on.reduce((a,s)=>x[s]<x[a]?s:a);
+      if(Math.max(...v)-Math.min(...v)>=25&&x[b]<=30){ why.push([`${SN[b]} 편중`,'hi']); sc+=1.5; }
+    }
+    const ag=age(pubDate(x),ref);
+    if(ag!=null&&ag<0){ why.push([`출간 ${-ag}일 전 예약`,'']); sc+=1; }
+    else if(ag!=null&&ag<=30){ why.push([`신간 ${ag}일차`,'']); sc+=1; }
+    else if(ag!=null&&ag>365&&sc>=3){ why.push(['구간 재부상','up']); sc+=1.5; }
+    if(d==='nil'){ why.push(['견인 요인 미조사','q']); sc+=.5; }
+    else if(d==='none'||(P&&P.s==='미확인')){ why.push(['견인 요인 미규명','q']); sc+=.5; }
+    if(d==='inst')sc-=1.5;                                  // 시험서·교재는 제도 수요라 마케팅 참고 가치가 낮다
+    if(sc>=2.5)out.push({x,why,sc});
+  });
+  out.sort((a,b)=>b.sc-a.sc||a.x.r-b.x.r);
+  return out.slice(0,12);
+}
+function bkCard(o,ref){
+  const {x,why}=o, n=noteOf(x,ref);
+  return `<article class="bk" data-i="${E(x.i)}">
+    <header><span class="bkr${x.r<=3?' t3':''}">${x.r}</span>
+      <div class="bkt"><b>${E(x.t)}</b><i>${E([x.au,x.p,x.g].filter(Boolean).join(' · '))}</i></div></header>
+    <div class="bkw">${why.map(([t,c])=>`<span class="bw ${c}">${E(t)}</span>`).join('')}</div>
+    <dl class="bkn">
+      <div><dt>출간일</dt><dd>${E(n.pd)}${n.ageT?` <span class="fl">· ${E(n.ageT)}</span>`:''}</dd></div>
+      <div><dt>서점 순위</dt><dd class="num">${E(n.rk)}</dd></div>
+      <div><dt>판매지수</dt><dd class="num">${E(n.sp)}${n.spr?` <span class="fl">${E(n.spr)}</span>`:''}</dd></div>
+    </dl>
+    <div class="bkd"><span class="dtag d-${n.d}">${E(n.lb)}</span>${n.st?`<span class="dst ${STC[n.st]||''}">${E(n.st)}</span>`:''}
+      <p>${E(n.sum)}</p></div>
+  </article>`;
+}
+function noteTable(cur,ref){
+  return `<div class="bft-wrap"><table class="bft"><thead><tr>
+      <th class="n">순위</th><th>도서 · 저자 · 출판사</th><th>출간일</th><th class="n">교 · 예 · 알</th>
+      <th class="n">판매지수</th><th>판매 견인 요인</th><th>판정</th><th>메모</th></tr></thead><tbody>
+    ${cur.rows.map(x=>{ const n=noteOf(x,ref), m=memoGet(x.i);
+      return `<tr data-i="${E(x.i)}"><td class="n">${x.r}</td>
+        <td><b>${E(x.t)}</b><br><em>${E([x.au,x.p].filter(Boolean).join(' · '))}</em></td>
+        <td style="white-space:nowrap">${E(n.pd)}<br><em>${E(n.ageT)}</em></td>
+        <td class="n">${ST.map(s=>x[s]!=null?x[s]:'–').join(' · ')}</td>
+        <td class="n">${E(n.sp)}${n.spr?`<br><em>${E(n.spr)}</em>`:''}</td>
+        <td><span class="dtag d-${n.d}">${E(n.lb)}</span><br><em>${E(sent(n.P?(n.P.n1||n.P.n):'',70))}</em></td>
+        <td>${n.st?`<span class="dst ${STC[n.st]||''}">${E(n.st)}</span>`:'<em>—</em>'}</td>
+        <td><em>${E(m.length>30?m.slice(0,29)+'…':m)}</em></td></tr>`; }).join('')}
+    </tbody></table></div>`;
+}
+
+/* ── 6. 3사 나란히 ─────────────────────────────────────────────────
+   그 날짜의 서점별 종합 50위를 서버 granks 에서 받는다(분야 화면과 같은 경로·캐시).
+   못 받으면 통합 TOP 50 안의 서점 순위로 대신하고 그 사실을 밝힌다. */
+const SIDE=new Map();
+async function sideData(cur){
+  const key=rd8(cur); if(SIDE.has(key))return SIDE.get(key);
+  const res={src:{}};
+  await Promise.all(ST.map(async s=>{
+    let list=null;
+    try{
+      if(typeof loadGRank==='function'){
+        const g=await loadGRank(SHOPCODE[s][0],SHOPCODE[s][1],key,60);
+        if(g&&g.length>=20)list=g.filter(z=>z.rank<=50&&/^97\d{11}$/.test(z.isbn||''))
+          .map(z=>({r:z.rank,i:z.isbn,t:(z.gbooks&&z.gbooks.title)||titleOf(z.isbn)||z.isbn}));
+      }
+    }catch(e){}
+    if(list&&list.length>=20){ res[s]=list; res.src[s]='full'; }
+    else{ res[s]=cur.rows.filter(x=>x[s]!=null).sort((a,b)=>a[s]-b[s]).map(x=>({r:x[s],i:x.i,t:x.t})); res.src[s]='part'; }
+  }));
+  SIDE.set(key,res); return res;
+}
+
+/* ── 7. 요인 분석 ─────────────────────────────────────────────────── */
+function stats(D,i,per){
+  const R=D.slice(per?Math.max(0,i-per+1):0,i+1);
+  const B=new Map(), base={k:0,y:0,a:0}; let tot=0;
+  R.forEach(rd=>rd.rows.forEach(x=>{
+    if(!x.i||/^977/.test(x.i))return; tot++;
+    let b=B.get(x.i);
+    if(!b){ b={i:x.i,t:x.t,p:x.p||'',g:x.g||'',n:0,best:999,st:{k:0,y:0,a:0},tri:0,last:rd}; B.set(x.i,b); }
+    b.n++; b.last=rd; if(x.r<b.best)b.best=x.r;
+    let c=0; ST.forEach(s=>{ if(x[s]!=null){ b.st[s]++; base[s]++; c++; } }); if(c===3)b.tri++;
+  }));
+  B.forEach(b=>{
+    b.P=pathOf(b.i); b.d=drvId(b.P); b.ok=usable(b.P);
+    b.skew=null;
+    ST.forEach(s=>{ if(b.st[s]/b.n>=.8&&ST.filter(o=>o!==s).every(o=>b.st[o]/b.n<=.3))b.skew=s; });
+  });
+  return {R,B,base,tot};
+}
+const median=a=>{ if(!a.length)return null; const s=a.slice().sort((p,q)=>p-q), m=s.length>>1; return s.length%2?s[m]:(s[m-1]+s[m])/2; };
+const pct=(a,b)=>b?Math.round(a/b*100):0;
+function hbars(pairs,unit){
+  const mx=Math.max(1,...pairs.map(p=>p[1]));
+  return pairs.map(([l,v,sub])=>`<div class="hb"><span class="l">${E(l)}</span><span class="b"><i style="width:${(v/mx*100).toFixed(1)}%"></i></span>
+    <span class="v">${typeof v==='number'&&!Number.isInteger(v)?v.toFixed(1):v}${unit||''}${sub?`<em>${E(sub)}</em>`:''}</span></div>`).join('');
+}
+function fundShop(P){
+  const t=(P.k||'')+' '+plain(P.n1||'')+' '+plain(P.n||'');
+  if(/북펀드|알라딘/.test(t))return 'a';
+  if(/그래제본소|예스24 ?펀딩|예스펀딩|예스 ?북펀딩/.test(t))return 'y';
+  if(/바로펀딩|교보/.test(t))return 'k';
+  return null;
+}
+
+/* ── 8. 주간 회고 ─────────────────────────────────────────────────── */
+const META_TAG=/백로그|교보단독|미검출|미확인|무인회차|규칙분류|편중판정불가|^none$|조사생략|구간$|^20\d\d|카드|회차|^신간$|번역서|출간전진입|출간5일이내|^예약|소형출판사|스테디셀러|장기체류|반례|정점|^[a-z_]+$|규명|재조사|판정|표본/;
+function weekData(D,i){
+  const end=rdD(D[i]), s=new Date(end); s.setDate(s.getDate()-6);
+  const ps=new Date(s); ps.setDate(ps.getDate()-7);
+  const W=D.filter(r=>{ const t=rdD(r); return t>=s&&t<=end; });
+  const P=D.filter(r=>{ const t=rdD(r); return t>=ps&&t<s; });
+  const book=rs=>{ const m=new Map(); rs.forEach(rd=>rd.rows.forEach(x=>{ if(!x.i||/^977/.test(x.i))return;
+    const b=m.get(x.i)||{x,n:0,best:999,st:{k:0,y:0,a:0}}; b.x=x; b.n++; if(x.r<b.best)b.best=x.r;
+    ST.forEach(k=>{ if(x[k]!=null)b.st[k]++; }); m.set(x.i,b); })); return m; };
+  const WB=book(W), PB=book(P);
+  const nw=[...WB.keys()].filter(k=>!PB.has(k)), out=[...PB.keys()].filter(k=>!WB.has(k));
+  return {s,end,ps,W,P,WB,PB,nw,out};
+}
+function genreShift(WB,PB){
+  const sh=m=>{ const c={}; m.forEach(b=>{ const g=b.x.g||'미분류'; c[g]=(c[g]||0)+1; }); const n=m.size||1; const o={}; Object.keys(c).forEach(g=>o[g]=c[g]/n*100); return o; };
+  const a=sh(WB), b=sh(PB);
+  return [...new Set([...Object.keys(a),...Object.keys(b)])].map(g=>({g,now:a[g]||0,d:(a[g]||0)-(b[g]||0)}))
+    .filter(x=>x.g!=='미분류').sort((p,q)=>q.d-p.d);
+}
+function rankAround(isbn,dateIso){
+  const h=((DB.hist||{})[isbn]||{}).h||[], t=isoD(dateIso);
+  let before=null, after=null;
+  h.forEach(e=>{ if(e.r==null)return; const d=isoD(e.d), g=dayDiff(d,t);
+    if(g<0&&g>=-14)before=e; if(g>=0&&g<=14&&!after)after=e; });
+  return {before,after};
+}
+function rxText(isbn,dateIso){
+  const {before,after}=rankAround(isbn,dateIso);
+  if(!after&&!before)return {t:'순위 기록 밖',c:''};
+  if(after&&!before)return {t:`→ ${after.r}위 진입`,c:'up'};
+  if(before&&!after)return {t:`${before.r}위 → 이후 미등재`,c:''};
+  return {t:`${before.r}위 → ${after.r}위`,c:after.r<before.r?'up':after.r>before.r?'dn':''};
+}
+function datedFacts(P){
+  return (Array.isArray(P&&P.f)?P.f:[]).filter(f=>f&&typeof f==='object'&&/^\d{4}-\d{2}-\d{2}/.test(String(f.date||'')))
+    .map(f=>({d:String(f.date).slice(0,10),t:plain(f.fact||f.text||'')})).filter(f=>f.t);
+}
+function storeCharacter(WB){
+  const all={}, per={k:{},y:{},a:{}}, nPer={k:0,y:0,a:0}, solo={k:0,y:0,a:0}; let n=0;
+  WB.forEach(b=>{ const g=b.x.g||''; if(!g)return; n++; all[g]=(all[g]||0)+1;
+    const on=ST.filter(s=>b.st[s]>0); if(on.length===1)solo[on[0]]++;
+    on.forEach(s=>{ per[s][g]=(per[s][g]||0)+1; nPer[s]++; }); });
+  return ST.map(s=>{
+    const lift=Object.keys(per[s]).filter(g=>per[s][g]>=2).map(g=>({g,d:per[s][g]/nPer[s]*100-all[g]/n*100}))
+      .filter(x=>x.d>=3).sort((p,q)=>q.d-p.d).slice(0,2);
+    return {s,lift,solo:solo[s],n:nPer[s]};
+  });
+}
+
+/* ── 9. 화면 ─────────────────────────────────────────────────────── */
+const BR={v:'pick',key:null,per:30,hl:null};
+function curIdx(D){
+  if(BR.key){ const i=D.findIndex(r=>rd8(r)===BR.key); if(i>=0)return i; }
+  if(!D.length){ BR.key=null; return -1; }
+  BR.key=rd8(D[D.length-1]); return D.length-1;
+}
+function paintPicker(D,i){
+  const sel=Q('#bfday'); if(!sel)return;
+  sel.innerHTML=D.map((r,j)=>[j,r]).reverse().map(([j,r])=>`<option value="${j}"${j===i?' selected':''}>${rdDot(r)}</option>`).join('');
+  Q('#bfprev').disabled=i<=0; Q('#bfnext').disabled=i>=D.length-1;
+  document.querySelectorAll('#bfseg button').forEach(b=>b.setAttribute('aria-selected',b.dataset.b===BR.v));
+}
+let SEQ=0;
+async function paintBrief(){
+  const body=Q('#bfbody'); if(!body)return;
+  const D=D3(), i=curIdx(D);
+  paintPicker(D,i);
+  if(i<0){ body.innerHTML='<div class="empty"><b>3사 일간 회차가 없습니다</b>서버 자료를 받은 뒤 다시 열어 주세요.</div>'; return; }
+  const my=++SEQ;
+  try{
+    if(BR.v==='pick')body.innerHTML=viewPick(D,i);
+    else if(BR.v==='factor')body.innerHTML=viewFactor(D,i);
+    else if(BR.v==='week'){ body.innerHTML=viewWeek(D,i); bindWeek(D,i); }
+    else if(BR.v==='side'){
+      body.innerHTML='<div class="empty"><b>서점별 순위를 받는 중…</b></div>';
+      const sd=await sideData(D[i]);
+      if(my!==SEQ)return;
+      body.innerHTML=viewSide(D[i],sd);
+    }
+  }catch(e){
+    console.warn('[brief]',e);
+    body.innerHTML=`<div class="empty"><b>그리지 못했습니다</b>${E(e.message||e)}</div>`;
+  }
+}
+
+function viewPick(D,i){
+  const cur=D[i], ref=rdD(cur), pk=picks(D,i), pv=i>0?D[i-1]:null;
+  return `<p class="bflead"><b>${rdDot(cur)}</b> 3사 통합 TOP 50 중 먼저 볼 책 <b>${pk.length}종</b>입니다.
+      신규 진입·3회차 연속 상승·서점 편중·신간·견인 요인 미규명 신호를 합산해 골랐습니다.
+      ${pv?`비교선은 직전 회차 ${rdDot(pv)}입니다.`:'직전 회차가 없어 신규·등락 신호는 빠졌습니다.'}</p>
+    ${pk.length?pk.map(o=>bkCard(o,ref)).join(''):'<div class="empty"><b>두드러진 신호가 없는 회차입니다</b></div>'}
+    <h3 class="bfsub">도서 노트 전체 <small>${cur.rows.length}종 · 마케터 열 구조</small></h3>
+    <p class="bfnote">판매지수는 알라딘 SalesPoint(「알」)입니다. 다른 서점 지수와 산식이 달라 크기를 견주지 않습니다.
+      증감률은 직전 회차 대비 한 번의 변화라 추세 판정에 쓰지 않습니다.</p>
+    ${noteTable(cur,ref)}
+    <div class="btnrow"><button class="btn" id="bfxls">엑셀로 받기 · 3사 나란히 + 도서 노트</button></div>`;
+}
+
+function viewSide(cur,sd){
+  const sets={}; ST.forEach(s=>sets[s]=new Set(sd[s].map(z=>z.i)));
+  const allI=new Set(ST.flatMap(s=>[...sets[s]]));
+  let c3=0,c2=0; const solo={k:0,y:0,a:0};
+  allI.forEach(i=>{ const on=ST.filter(s=>sets[s].has(i)); if(on.length===3)c3++; else if(on.length===2)c2++; else solo[on[0]]++; });
+  const part=ST.filter(s=>sd.src[s]==='part');
+  const col=s=>`<div class="bsc"><h4>${SN[s]==='교보'?'교보문고':SN[s]}<small>${sd.src[s]==='full'?'종합 50위':'통합 TOP 50 안에서만'}</small></h4><ol>
+    ${sd[s].map(z=>{ const oth=ST.filter(o=>o!==s&&sets[o].has(z.i)); const isSolo=!oth.length;
+      return `<li data-i="${E(z.i)}" class="${isSolo?'solo':''}${BR.hl===z.i?' hl':''}"><span class="r">${z.r}</span><span class="t">${E(z.t)}</span>
+        <span class="m">${isSolo?'<b>단독</b>':oth.map(o=>SA[o]+' '+(sd[o].find(q=>q.i===z.i)||{}).r).join(' · ')}</span></li>`; }).join('')}
+    </ol></div>`;
+  return `<p class="bflead"><b>${rdDot(cur)}</b> 세 서점의 종합 순위를 나란히 놓았습니다.
+      초록 줄은 <b>그 서점에만 있는 책</b>입니다 — 서점 단독 기획전·굿즈·펀딩을 먼저 의심할 자리입니다. 책을 누르면 세 목록에서 같은 책을 짚습니다.</p>
+    <div class="bsum">
+      <div><div class="k">3사 공통</div><div class="v">${c3}</div></div>
+      <div><div class="k">2사 공통</div><div class="v">${c2}</div></div>
+      ${ST.map(s=>`<div><div class="k">${SN[s]}만</div><div class="v">${solo[s]}</div></div>`).join('')}
+    </div>
+    <div class="bsinfo" id="bsinfo" hidden></div>
+    <div class="bs3${BR.hl?' hlon':''}" id="bs3">${ST.map(col).join('')}</div>
+    ${part.length?`<p class="bfnote" style="padding-top:10px">${part.map(s=>SN[s]).join('·')}의 그날 종합 순위 원본을 받지 못해 3사 통합 TOP 50 안에 든 책만 보입니다. 단독·공통 수치는 그만큼 과소 집계입니다.</p>`
+      :'<p class="bfnote" style="padding-top:10px">비도서(ISBN 97x 외)는 뺐습니다. 서점마다 집계 기준·시각이 달라 같은 날이라도 순위를 직접 견주지 않습니다.</p>'}`;
+}
+function sideInfo(isbn){
+  const box=Q('#bsinfo'); if(!box)return;
+  const D=D3(), cur=D[curIdx(D)], sd=SIDE.get(rd8(cur)); if(!sd)return;
+  const r=ST.map(s=>{ const z=sd[s].find(q=>q.i===isbn); return `${SA[s]} ${z?z.r:'–'}`; }).join(' · ');
+  const t=(ST.map(s=>sd[s].find(q=>q.i===isbn)).find(Boolean)||{}).t||titleOf(isbn);
+  const d=drvId(pathOf(isbn));
+  box.innerHTML=`<div style="min-width:0"><b>${E(t)}</b><br><span class="num">${E(r)}</span> · <span class="dtag d-${d}">${E(DLB[d])}</span></div>
+    <button class="btn ghost" data-open="${E(isbn)}">상세</button>`;
+  box.hidden=false;
+}
+
+function viewFactor(D,i){
+  const per=BR.per, {R,B,base,tot}=stats(D,i,per);
+  const books=[...B.values()], ok=books.filter(b=>b.ok);
+  const from=R[0], to=R[R.length-1];
+  // Q1 유형별 체류
+  const byD={};
+  books.forEach(b=>{ const k=b.ok?b.d:'_unk'; (byD[k]=byD[k]||[]).push(b); });
+  const rowsQ1=Object.entries(byD).map(([k,a])=>{
+    const n=a.length, stay=a.reduce((s,b)=>s+b.n,0)/n, best=median(a.map(b=>b.best));
+    const apps=a.reduce((s,b)=>s+b.n,0), tri=a.reduce((s,b)=>s+b.tri,0);
+    const sk={k:0,y:0,a:0}; a.forEach(b=>{ if(b.skew)sk[b.skew]++; });
+    const skTop=ST.slice().sort((p,q)=>sk[q]-sk[p])[0];
+    return {k,lb:k==='_unk'?'미규명·미조사':DLB[k],n,stay,best,tri:pct(tri,apps),sk:sk[skTop]?`${SN[skTop]} ${sk[skTop]}종`:'—'};
+  }).sort((p,q)=>(p.k==='_unk')-(q.k==='_unk')||(q.n>=5)-(p.n>=5)||q.stay-p.stay);
+  // Q2 서점 편중 도서의 요인
+  const q2=ST.map(s=>{
+    const a=books.filter(b=>b.skew===s), c={};
+    a.forEach(b=>{ if(b.ok)c[DLB[b.d]]=(c[DLB[b.d]]||0)+1; });
+    const top=Object.entries(c).sort((p,q)=>q[1]-p[1]).slice(0,3);
+    const okA=a.filter(b=>b.ok);
+    return {s,n:a.length,nOk:okA.length,top,ex:(okA.length?okA:a).sort((p,q)=>q.n-p.n).slice(0,3)};
+  });
+  // Q3 펀딩
+  const fund=ok.filter(b=>b.d==='fund').map(b=>({b,fs:fundShop(b.P)})).sort((p,q)=>q.b.n-p.b.n);
+  const fm=fund.filter(f=>f.fs&&f.b.skew), fmOk=fm.filter(f=>f.fs===f.b.skew).length;
+  // Q4 출판사 × 서점
+  const pub=new Map();
+  R.forEach(rd=>rd.rows.forEach(x=>{ if(!x.i||!x.p||/^977/.test(x.i))return;
+    const p=pub.get(x.p)||{p:x.p,n:0,k:0,y:0,a:0,bk:new Set()}; p.n++; p.bk.add(x.i); ST.forEach(s=>{ if(x[s]!=null)p[s]++; }); pub.set(x.p,p); }));
+  const B0={k:base.k/tot*100,y:base.y/tot*100,a:base.a/tot*100};
+  const q4=[...pub.values()].filter(p=>p.n>=8&&p.bk.size>=2).map(p=>{
+    const sh={}; ST.forEach(s=>sh[s]=p[s]/p.n*100);
+    const best=ST.slice().sort((a,b)=>(sh[b]-B0[b])-(sh[a]-B0[a]))[0];
+    return {p,sh,best,lift:sh[best]-B0[best]};
+  }).filter(x=>x.lift>=8).sort((a,b)=>b.lift-a.lift).slice(0,12);
+  // Q5 미규명
+  const recent=new Set(R.slice(-14).flatMap(rd=>rd.rows.map(x=>x.i)));
+  const q5=books.filter(b=>!b.ok&&recent.has(b.i)).sort((p,q)=>q.n-p.n||p.best-q.best).slice(0,15);
+
+  const perBtn=[[30,'최근 30회차'],[90,'최근 90회차'],[0,'전체']]
+    .map(([v,l])=>`<button data-per="${v}" aria-pressed="${BR.per===v}">${l}</button>`).join('');
+  return `<div class="bfper" id="bfper">${perBtn}</div>
+    <p class="bflead">3사 통합 일간 <b>${R.length}회차</b>(${rdDot(from)} ~ ${rdDot(to)}) · 등장 도서 <b>${books.length}종</b> 중
+      판매 견인 요인이 확인·추정된 <b>${ok.length}종</b>으로 답합니다. 교보 단독 수집 구간은 섞지 않았습니다.
+      표본 5종 미만 유형은 흐리게 두고 판정하지 않습니다.</p>
+
+    <h3 class="bfsub">Q1. 어떤 판매 견인 요인이 순위를 오래 지키나</h3>
+    <p class="bfnote">체류 = 이 기간 통합 TOP 50 에 든 회차 수. 3사 동시 = 등장한 회차 중 세 서점 모두에 순위가 있던 비율.</p>
+    <div class="bft-wrap"><table class="bft sm"><thead><tr><th>판매 견인 요인</th><th class="n">도서</th><th class="n">평균 체류</th>
+      <th class="n">최고 순위 중앙값</th><th class="n">3사 동시</th><th>주 편중 서점</th></tr></thead><tbody>
+      ${rowsQ1.map(r=>`<tr class="${r.n<5?'thin':''}"><td><span class="dtag d-${r.k==='_unk'?'none':r.k}">${E(r.lb)}</span></td>
+        <td class="n">${r.n}</td><td class="n">${r.stay.toFixed(1)}회</td><td class="n">${r.best==null?'—':Math.round(r.best)+'위'}</td>
+        <td class="n">${r.tri}%</td><td>${E(r.sk)}</td></tr>`).join('')}
+    </tbody></table></div>
+
+    <h3 class="bfsub">Q2. 왜 한 서점에서만 잘될까</h3>
+    <p class="bfnote">서점 편중 = 등장 회차의 80% 이상이 그 서점에 있고, 다른 두 서점에는 30% 이하인 책.</p>
+    ${q2.map(o=>`<div class="wkb"><h4>${SN[o.s]} 편중 <small>${o.n}종</small></h4>
+      ${o.n?`<p>${o.top.length?o.top.map(([k,v])=>`<b>${E(k)}</b> ${v}종`).join(' · '):'견인 요인이 확인된 책이 아직 없습니다'}
+          <span class="fl"> · 미규명·미조사 ${o.n-o.nOk}종</span></p>
+        <p style="margin-top:4px">${o.ex.map(b=>`『${E(b.t)}』`).join(', ')}</p>`:'<p>이 기간에는 편중 도서가 없습니다.</p>'}</div>`).join('')}
+
+    <h3 class="bfsub">Q3. 펀딩으로 오른 책은 얼마나 버티나 <small>${fund.length}종</small></h3>
+    ${fund.length?`<p class="bfnote">${fm.length?`펀딩 서점이 확인되고 서점 편중이 잡힌 ${fm.length}종 중 <b style="color:var(--ink)">${fmOk}종</b>이 펀딩한 서점에 편중됐습니다.`
+        :'펀딩 도서가 이 기간에는 한 서점에 치우치지 않았습니다(편중 기준 미충족).'}</p>
+      <div class="bft-wrap"><table class="bft sm"><thead><tr><th>도서</th><th>펀딩 서점</th><th class="n">체류</th><th class="n">최고</th><th>편중</th></tr></thead><tbody>
+      ${fund.slice(0,15).map(({b,fs})=>`<tr data-i="${E(b.i)}"><td><b>${E(b.t)}</b><br><em>${E(b.p)}</em></td><td>${fs?SN[fs]:'<em>미상</em>'}</td>
+        <td class="n">${b.n}회</td><td class="n">${b.best}위</td><td class="${fs&&fs===b.skew?'top':''}">${b.skew?SN[b.skew]:'<em>3사 고름</em>'}</td></tr>`).join('')}
+      </tbody></table></div>`:'<p class="bfnote">이 기간에 펀딩이 견인 요인으로 확인된 책이 없습니다.</p>'}
+
+    <h3 class="bfsub">Q4. 출판사는 어느 서점에서 강한가</h3>
+    <p class="bfnote">그 출판사 책이 통합 TOP 50 에 든 행 중 서점별 순위가 있는 비율입니다. 전체 평균은
+      교보 ${B0.k.toFixed(0)}% · 예스24 ${B0.y.toFixed(0)}% · 알라딘 ${B0.a.toFixed(0)}%. 평균보다 8%p 이상 높은 출판사만 보입니다(등장 8행·2종 이상).</p>
+    ${q4.length?`<div class="bft-wrap"><table class="bft sm"><thead><tr><th>출판사</th><th class="n">등장</th>${ST.map(s=>`<th class="n">${SN[s]}</th>`).join('')}<th>강한 서점</th></tr></thead><tbody>
+      ${q4.map(o=>`<tr><td><b>${E(o.p.p)}</b> <em>${o.p.bk.size}종</em></td><td class="n">${o.p.n}</td>
+        ${ST.map(s=>`<td class="n${s===o.best?' top':''}">${o.sh[s].toFixed(0)}%</td>`).join('')}<td>${SN[o.best]} +${o.lift.toFixed(0)}%p</td></tr>`).join('')}
+      </tbody></table></div>`:'<p class="bfnote">평균에서 크게 벗어난 출판사가 없습니다.</p>'}
+
+    <h3 class="bfsub">Q5. 아직 이유를 모르는 책 <small>최근 14회차 · ${q5.length}종</small></h3>
+    <p class="bfnote">「미조사」는 아직 찾아보지 않은 것, 「미규명」은 찾아봤지만 경로가 나오지 않은 것입니다. 다음 조사 대상입니다.</p>
+    ${q5.length?`<div class="bft-wrap"><table class="bft sm"><thead><tr><th>도서</th><th class="n">체류</th><th class="n">최고</th><th>상태</th></tr></thead><tbody>
+      ${q5.map(b=>`<tr data-i="${E(b.i)}"><td><b>${E(b.t)}</b><br><em>${E(b.p)}</em></td><td class="n">${b.n}회</td><td class="n">${b.best}위</td>
+        <td><span class="dtag d-${b.d}">${E(b.P&&b.P.s==='미확인'&&b.d!=='none'?'미규명':DLB[b.d])}</span></td></tr>`).join('')}
+      </tbody></table></div>`:'<p class="bfnote">최근 등장 도서의 견인 요인이 모두 정리돼 있습니다.</p>'}`;
+}
+
+function viewWeek(D,i){
+  const w=weekData(D,i), key=rd8(D[i]);
+  const note=lsGet(WK_K+key,{})||{};
+  const lbl=d=>`${d.getMonth()+1}/${d.getDate()}`;
+  // 수요 키워드
+  const gs=w.P.length?genreShift(w.WB,w.PB):[];
+  const up=gs.filter(x=>x.d>=2).slice(0,3), dn=gs.slice().reverse().filter(x=>x.d<=-2).slice(0,2);
+  const tagC={};
+  const pool=w.nw.length>=3?w.nw:[...w.WB.keys()];
+  pool.forEach(i=>{ const P=pathOf(i); (P&&P.tags||[]).forEach(t=>{ if(!META_TAG.test(t))tagC[t]=(tagC[t]||0)+1; }); });
+  const tags=Object.entries(tagC).filter(([,v])=>v>=2).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  // 견인 요인 분포(신규 진입)
+  const dC={}; w.nw.forEach(i=>{ const P=pathOf(i); const k=usable(P)?DLB[drvId(P)]:'미규명·미조사'; dC[k]=(dC[k]||0)+1; });
+  const dPairs=Object.entries(dC).sort((a,b)=>(a[0]==='미규명·미조사')-(b[0]==='미규명·미조사')||b[1]-a[1]);
+  // 이슈 캘린더
+  const from=new Date(w.s); from.setDate(from.getDate()-7);
+  const ev=[];
+  new Set([...w.WB.keys(),...w.PB.keys()]).forEach(i=>{ datedFacts(pathOf(i)).forEach(f=>{
+    const t=isoD(f.d); if(t>=from&&t<=w.end)ev.push({i,d:f.d,t:f.t,title:(w.WB.get(i)||w.PB.get(i)).x.t}); }); });
+  ev.sort((a,b)=>a.d<b.d?1:-1);
+  // 서점별 성격
+  const sc=storeCharacter(w.WB);
+  // 미해결
+  const unk=w.nw.filter(i=>!usable(pathOf(i)));
+  const area=(k,l,ph)=>`<label for="wn-${k}">${l}</label><textarea id="wn-${k}" data-k="${k}" placeholder="${E(ph)}">${E(note[k]||'')}</textarea>`;
+  return `<p class="bflead"><b>${lbl(w.s)} ~ ${lbl(w.end)}</b> 3사 일간 ${w.W.length}회차를 직전 주(${w.P.length}회차)와 견줘 초안을 만들었습니다.
+      자동으로 채운 칸 아래 내 메모를 더해 「텍스트로 복사」하면 마케터 일지 양식으로 붙여 넣을 수 있습니다.</p>
+    <div class="wk2">
+      <div><div class="k">등장 도서</div><div class="v">${w.WB.size}</div></div>
+      <div><div class="k">새로 들어옴</div><div class="v">${w.P.length?w.nw.length:'—'}</div></div>
+      <div><div class="k">빠짐</div><div class="v">${w.P.length?w.out.length:'—'}</div></div>
+      <div><div class="k">요인 미규명</div><div class="v">${w.P.length?unk.length:'—'}</div></div>
+    </div>
+    <div class="wkgrid">
+    <div class="wkb"><h4>수요 키워드</h4>
+      ${w.P.length?`<p>${up.length?up.map(x=>`<b>${E(x.g)}</b> +${x.d.toFixed(0)}%p`).join(' · '):'두드러지게 는 분야 없음'}
+        ${dn.length?`<br><span class="fl">줄어든 분야 · ${dn.map(x=>`${E(x.g)} ${x.d.toFixed(0)}%p`).join(' · ')}</span>`:''}</p>`:'<p>직전 주 회차가 없어 분야 변화를 잴 수 없습니다.</p>'}
+      ${tags.length?`<p style="margin-top:6px">${tags.map(([t,v])=>`#${E(t)} <span class="fl">${v}</span>`).join('&nbsp; ')}</p>`:''}
+    </div>
+    <div class="wkb"><h4>판매 견인 요인 <small>새로 들어온 ${w.nw.length}종</small></h4>
+      ${dPairs.length?`<div style="margin:0 -16px">${hbars(dPairs,'종')}</div>`:'<p>새로 들어온 책이 없습니다.</p>'}
+    </div>
+    <div class="wkb"><h4>이슈 캘린더 <small>${lbl(from)} ~ ${lbl(w.end)}</small></h4>
+      ${ev.length?`<ul>${ev.slice(0,14).map(e=>{ const rx=rxText(e.i,e.d);
+        return `<li data-i="${E(e.i)}"><span class="dt">${e.d.slice(5).replace('-','/')}</span>${E(e.t.length>80?e.t.slice(0,79)+'…':e.t)}
+          <br>『<b>${E(e.title)}</b>』<span class="rx ${rx.c}">${E(rx.t)}</span></li>`; }).join('')}</ul>`
+        :'<p>이 기간 날짜가 붙은 근거가 없습니다. 경로 조사의 facts 에 날짜가 있어야 여기에 올라옵니다.</p>'}
+    </div>
+    <div class="wkb"><h4>서점별 성격</h4><ul>
+      ${sc.map(o=>`<li><b>${SN[o.s]}</b> · ${o.lift.length?o.lift.map(x=>`${E(x.g)} +${x.d.toFixed(0)}%p`).join(' · '):'평균과 비슷'}
+        <span class="fl">· 단독 ${o.solo}종</span></li>`).join('')}</ul>
+      <p class="fl" style="font-size:11px;margin-top:4px">그 서점에 순위가 있는 책의 분야 비중 − 3사 전체 비중. 3%p 이상만.</p>
+    </div>
+    <div class="wkb"><h4>미해결 질문 <small>견인 요인 미규명·미조사</small></h4>
+      ${unk.length?`<ul>${unk.slice(0,10).map(i=>{ const b=w.WB.get(i); return `<li data-i="${E(i)}">『<b>${E(b.x.t)}</b>』 <span class="fl">최고 ${b.best}위 · ${b.n}회 · ${E(b.x.p||'')}</span></li>`; }).join('')}</ul>`
+        :'<p>새로 들어온 책의 견인 요인이 모두 정리돼 있습니다.</p>'}
+    </div>
+    <div class="wkb" id="wknote"><h4>내 메모 <small>이 기기에만 저장</small></h4>
+      ${area('insight','인사이트','예) 저자 채널이 있으면 1순위로 기획하기')}
+      ${area('question','질문','예) 북펀딩에 성공해서 베셀에 오르는 수치가 따로 있나?')}
+      ${area('read','읽고 싶은 책','')}
+      ${area('idea','콘텐츠 아이디어','')}
+    </div>
+    </div>
+    <div class="btnrow"><button class="btn" id="wkcopy">텍스트로 복사</button><span class="okmsg" id="wkmsg"></span></div>`;
+}
+function weekText(D,i){
+  const w=weekData(D,i), note=lsGet(WK_K+rd8(D[i]),{})||{};
+  const lbl=d=>`${d.getMonth()+1}/${d.getDate()}`;
+  const gs=w.P.length?genreShift(w.WB,w.PB).filter(x=>x.d>=2).slice(0,3):[];
+  const tagC={}; (w.nw.length>=3?w.nw:[...w.WB.keys()]).forEach(i=>{ const P=pathOf(i); (P&&P.tags||[]).forEach(t=>{ if(!META_TAG.test(t))tagC[t]=(tagC[t]||0)+1; }); });
+  const tags=Object.entries(tagC).filter(([,v])=>v>=2).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([t])=>t);
+  const from=new Date(w.s); from.setDate(from.getDate()-7);
+  const ev=[]; new Set([...w.WB.keys(),...w.PB.keys()]).forEach(i=>datedFacts(pathOf(i)).forEach(f=>{ const t=isoD(f.d);
+    if(t>=from&&t<=w.end)ev.push(`${f.d.slice(5).replace('-','/')} ${f.t.slice(0,40)} — 『${(w.WB.get(i)||w.PB.get(i)).x.t}』 ${rxText(i,f.d).t}`); }));
+  const dC={}; w.nw.forEach(i=>{ const P=pathOf(i); if(usable(P)){ const k=DLB[drvId(P)]; dC[k]=(dC[k]||0)+1; } });
+  const sc=storeCharacter(w.WB).map(o=>`${SN[o.s]}: ${o.lift.length?o.lift.map(x=>`${x.g} +${x.d.toFixed(0)}%p`).join(', '):'평균과 비슷'}`);
+  const unk=w.nw.filter(i=>!usable(pathOf(i))).slice(0,6).map(i=>`『${w.WB.get(i).x.t}』`);
+  const L=(k,v)=>`**${k} | ${v||''}`;
+  return [
+    `${lbl(w.s)}~${lbl(w.end)} 3사 베셀 읽기 (3사 일간 ${w.W.length}회차)`,
+    L('수요 키워드',[gs.map(x=>`${x.g} +${x.d.toFixed(0)}%p`).join(', '),tags.map(t=>'#'+t).join(' ')].filter(Boolean).join(' / ')),
+    L('이슈 or 이벤트',ev.slice(0,6).join(' / ')),
+    L('판매 견인 요인',Object.entries(dC).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`${k} ${v}`).join(' · ')),
+    L('서점별 성격',sc.join(' / ')),
+    L('미해결 질문',unk.length?unk.join(', ')+' — 견인 요인 미규명':''),
+    L('인사이트',note.insight), L('질문',note.question), L('읽고 싶은 책',note.read), L('콘텐츠 아이디어',note.idea),
+  ].join('\n');
+}
+function bindWeek(D,i){
+  const key=WK_K+rd8(D[i]); let t=null;
+  const box=Q('#wknote'); if(!box)return;
+  box.addEventListener('input',e=>{ const a=e.target.closest('textarea'); if(!a)return;
+    clearTimeout(t); t=setTimeout(()=>{ const n=lsGet(key,{})||{}; n[a.dataset.k]=a.value; lsSet(key,n); },300); });
+}
+async function copyText(s){
+  try{ await navigator.clipboard.writeText(s); return true; }
+  catch(e){ const ta=document.createElement('textarea'); ta.value=s; ta.style.position='fixed'; ta.style.opacity='0';
+    document.body.appendChild(ta); ta.select(); let ok=false; try{ ok=document.execCommand('copy'); }catch(_){} ta.remove(); return ok; }
+}
+
+/* ── 10. 엑셀 — 마케터 일지 양식 ─────────────────────────────────── */
+async function exportXlsx(){
+  const D=D3(), i=curIdx(D); if(i<0)return;
+  const cur=D[i], ref=rdD(cur), btn=Q('#bfxls');
+  if(btn){ btn.disabled=true; btn.textContent='만드는 중…'; }
+  try{
+    await loadXLSX();
+    const sd=await sideData(cur).catch(()=>null);
+    const wb=XLSX.utils.book_new();
+    const a1=[[`${rdDot(cur)} 3사 베스트셀러 (종합)`],[],['순위','교보문고','예스24','알라딘']];
+    if(sd){ const mx=Math.max(...ST.map(s=>sd[s].length?sd[s][sd[s].length-1].r:0),50);
+      for(let r=1;r<=Math.min(mx,50);r++)a1.push([r,...ST.map(s=>{ const z=sd[s].find(q=>q.r===r); return z?z.t:''; })]);
+      const part=ST.filter(s=>sd.src[s]==='part'); if(part.length)a1.push([],[`※ ${part.map(s=>SN[s]).join('·')}: 그날 종합 원본 미수신 — 3사 통합 TOP 50 안에 든 책만 표시`]);
+    }
+    const ws1=XLSX.utils.aoa_to_sheet(a1); ws1['!cols']=[{wch:6},{wch:36},{wch:36},{wch:36}];
+    XLSX.utils.book_append_sheet(wb,ws1,'3사 나란히');
+    const hd=['통합 순위','도서명','저자','출판사','분야','출간일','출간 경과','교보','예스24','알라딘',
+      '판매지수(알라딘)','판매지수 증감률(%)','판매 견인 요인','판정','근거 요약','출처','메모'];
+    const a2=[hd].concat(cur.rows.map(x=>{ const n=noteOf(x,ref), P=n.P;
+      const src=P&&Array.isArray(P.u)?P.u.map(u=>Array.isArray(u)?u[1]:(u&&u.url)||u).filter(u=>/^https?:/.test(String(u))).join('\n'):'';
+      return [x.r,x.t,x.au||'',x.p||'',x.g||'',n.pd,n.ageT,x.k??'',x.y??'',x.a??'',x.s??'',x.sr??'',
+        n.lb,n.st||'미조사',P?plain(P.n1||P.n):'',src,memoGet(x.i)]; }));
+    const ws2=XLSX.utils.aoa_to_sheet(a2);
+    ws2['!cols']=[{wch:6},{wch:34},{wch:14},{wch:14},{wch:10},{wch:11},{wch:11},{wch:6},{wch:6},{wch:6},{wch:10},{wch:10},{wch:14},{wch:7},{wch:60},{wch:40},{wch:30}];
+    ws2['!autofilter']={ref:`A1:Q${a2.length}`};
+    XLSX.utils.book_append_sheet(wb,ws2,'도서 노트');
+    XLSX.writeFile(wb,`TRACE_도서노트_${rd8(cur)}.xlsx`);
+  }catch(e){ alert('엑셀을 만들지 못했습니다 · '+(e.message||e)); }
+  finally{ if(btn){ btn.disabled=false; btn.textContent='엑셀로 받기 · 3사 나란히 + 도서 노트'; } }
+}
+
+/* ── 11. 도서 상세 — 견인 요인 표기 · 사건·순위 타임라인 · 메모 ──────── */
+function timeline(isbn){
+  const P=pathOf(isbn), b=(DB.hist||{})[isbn]; if(!P||!b)return '';
+  const ev=datedFacts(P).sort((p,q)=>p.d<q.d?-1:1); if(!ev.length)return '';
+  const h=(b.h||[]).filter(e=>e.r!=null).map(e=>({t:isoD(e.d),r:e.r,d:e.d}));
+  let svg='';
+  if(h.length>=2){
+    const t0=h[0].t, t1=h[h.length-1].t;
+    const lo=new Date(Math.min(t0,...ev.map(e=>isoD(e.d)).filter(t=>t>=t0-45*864e5)));
+    const hi=new Date(Math.max(t1,...ev.map(e=>isoD(e.d)).filter(t=>t<=+t1+14*864e5)));
+    const W=420,H=160,L=26,R=10,T=20,Bm=22, span=Math.max(1,hi-lo);
+    const maxR=Math.max(50,...h.map(e=>e.r));
+    const X=t=>L+(t-lo)/span*(W-L-R), Y=r=>T+(r-1)/(maxR-1)*(H-T-Bm);
+    let g=`<rect x="${L}" y="${T}" width="${W-L-R}" height="${H-T-Bm}" fill="none" stroke="#252525"/>`;
+    [1,10,25,50].filter(r=>r<=maxR).forEach(r=>{ g+=`<line x1="${L}" x2="${W-R}" y1="${Y(r).toFixed(1)}" y2="${Y(r).toFixed(1)}" stroke="#1d1d1d"/>
+      <text x="${L-5}" y="${(Y(r)+3.5).toFixed(1)}" font-size="10" fill="#6a6a6a" text-anchor="end">${r}</text>`; });
+    ev.forEach((e,k)=>{ const t=isoD(e.d); if(t<lo||t>hi)return; const x=X(t).toFixed(1);
+      g+=`<line x1="${x}" x2="${x}" y1="${T}" y2="${H-Bm}" stroke="#f2d08b" stroke-dasharray="3 3" opacity=".7"/>
+        <circle cx="${x}" cy="${T-8}" r="7" fill="#2a2416" stroke="#f2d08b"/><text x="${x}" y="${T-4.5}" font-size="9" font-weight="700" fill="#f2d08b" text-anchor="middle">${k+1}</text>`; });
+    // 끊긴 구간(미등재)은 선을 잇지 않는다
+    let seg=[], segs=[];
+    h.forEach((e,j)=>{ if(j&&dayDiff(e.t,h[j-1].t)>4){ segs.push(seg); seg=[]; } seg.push(e); }); segs.push(seg);
+    segs.forEach(s=>{ if(s.length>1)g+=`<polyline fill="none" stroke="#22e08a" stroke-width="2" points="${s.map(e=>`${X(e.t).toFixed(1)},${Y(e.r).toFixed(1)}`).join(' ')}"/>`; });
+    h.forEach(e=>{ g+=`<circle cx="${X(e.t).toFixed(1)}" cy="${Y(e.r).toFixed(1)}" r="2.2" fill="#22e08a"/>`; });
+    const f=d=>`${d.getMonth()+1}/${d.getDate()}`;
+    g+=`<text x="${L}" y="${H-6}" font-size="10" fill="#6a6a6a">${f(lo)}</text><text x="${W-R}" y="${H-6}" font-size="10" fill="#6a6a6a" text-anchor="end">${f(hi)}</text>`;
+    svg=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="순위와 사건 날짜">${g}</svg>`;
+  }
+  const h0=h.length?h[0].t:null, h1=h.length?h[h.length-1].t:null;
+  return `<h3 class="s">사건 · 순위 타임라인</h3><div class="tl">${svg}<ol>
+    ${ev.map((e,k)=>{ const t=isoD(e.d), outR=!h0||t<h0-45*864e5||t>+h1+14*864e5, rx=rxText(isbn,e.d);
+      return `<li class="${outR?'out':''}"><span class="no">${k+1}</span><span class="dt">${e.d.replace(/-/g,'.')}</span>
+        <span>${E(e.t)}<span class="rx ${rx.c}">${E(outR?'3사 통합 순위 기록 밖':rx.t)}</span></span></li>`; }).join('')}
+    </ol></div>
+    <p class="none">근거에 날짜가 붙은 사건만 올립니다. 순위는 3사 통합 일간 기준이며 사건 전후 14일 안의 기록으로 반응을 봅니다.
+      사건과 순위가 같이 움직였다고 인과가 확인된 것은 아닙니다.</p>`;
+}
+function enhanceBook(isbn){
+  const body=Q('#sheetbody'); if(!body||!isbn)return;
+  // 비고 메모 — 견인 요인 카드 바로 아래
+  const anchor=body.querySelector('.pathcard,.pathmini');
+  if(anchor&&!body.querySelector('.bmemo')){
+    anchor.insertAdjacentHTML('afterend',`<div class="bmemo"><label for="bmemo"><span>비고 · 내 메모</span><span>이 기기에만 저장</span></label>
+      <textarea id="bmemo" rows="2" placeholder="소구점, 참고할 콘텐츠 링크, 떠오른 질문…">${E(memoGet(isbn))}</textarea></div>`);
+    let t=null; const ta=body.querySelector('#bmemo');
+    ta.addEventListener('input',()=>{ clearTimeout(t); t=setTimeout(()=>memoSet(isbn,ta.value),300); });
+  }
+  // 타임라인 — 순위 추이 그래프 바로 아래
+  if(!body.querySelector('.tl')){
+    const tl=timeline(isbn);
+    if(tl){
+      const h3=[...body.querySelectorAll('h3.s')].find(h=>/순위 추이/.test(h.textContent));
+      const chart=h3&&h3.nextElementSibling;
+      if(chart)chart.insertAdjacentHTML('afterend',tl); else if(anchor)anchor.insertAdjacentHTML('afterend',tl);
+    }
+  }
+}
+
+/* ── 12. 기존 함수 감싸기 ──────────────────────────────────────────── */
+if(typeof pathCard==='function'){
+  const _pc=pathCard;
+  window.pathCard=pathCard=function(isbn){
+    const h=_pc.apply(this,arguments), d=drvId(pathOf(isbn));
+    return String(h)
+      .replace('<span class="tagbox">마케팅 분석</span>',`<span class="tagbox">판매 견인 요인</span><span class="dtag d-${d}">${E(DLB[d])}</span>`)
+      .replace('마케팅 분석 · 미조사','판매 견인 요인 · 미조사');
+  };
+}
+if(typeof paintBook==='function'){
+  const _pb=paintBook;
+  window.paintBook=paintBook=function(){
+    const r=_pb.apply(this,arguments);
+    try{ enhanceBook(CUR); }catch(e){ console.warn('[brief] 상세 보강 실패',e); }
+    return r;
+  };
+}
+let rt=null;
+const _pa=paint;
+window.paint=paint=function(){
+  const r=_pa.apply(this,arguments);
+  if(view==='brief'){ clearTimeout(rt); rt=setTimeout(()=>{ SIDE.clear(); paintBrief(); },60); }
+  return r;
+};
+if(Array.isArray(VIEWS)&&!VIEWS.includes('brief'))VIEWS.push('brief');
+const _go=go;
+window.go=go=async function(v){
+  const r=await _go.apply(this,arguments);
+  if(v==='brief'){ const c=Q('#ctrls'); if(c)c.hidden=true; paintBrief(); }
+  return r;
+};
+
+/* ── 13. 이벤트 ───────────────────────────────────────────────────── */
+const sec=Q('#v-brief'); if(!sec)return;
+Q('#bfseg').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b)return; BR.v=b.dataset.b; BR.hl=null; paintBrief(); window.scrollTo(0,0); });
+Q('#bfday').addEventListener('change',e=>{ const D=D3(), j=+e.target.value; if(D[j]){ BR.key=rd8(D[j]); BR.hl=null; paintBrief(); } });
+Q('#bfprev').addEventListener('click',()=>{ const D=D3(), j=curIdx(D); if(j>0){ BR.key=rd8(D[j-1]); BR.hl=null; paintBrief(); } });
+Q('#bfnext').addEventListener('click',()=>{ const D=D3(), j=curIdx(D); if(j<D.length-1){ BR.key=rd8(D[j+1]); BR.hl=null; paintBrief(); } });
+sec.addEventListener('click',async e=>{
+  const per=e.target.closest('[data-per]'); if(per){ BR.per=+per.dataset.per; paintBrief(); return; }
+  if(e.target.closest('#bfxls')){ exportXlsx(); return; }
+  if(e.target.closest('#wkcopy')){ const D=D3(), ok=await copyText(weekText(D,curIdx(D)));
+    const m=Q('#wkmsg'); if(m){ m.textContent=ok?'복사했습니다':'복사하지 못했습니다'; setTimeout(()=>{ m.textContent=''; },2500); } return; }
+  const op=e.target.closest('[data-open]'); if(op){ openBook(op.dataset.open); return; }
+  const li=e.target.closest('#bs3 li[data-i]');
+  if(li){ const i=li.dataset.i; BR.hl=BR.hl===i?null:i;
+    const box=Q('#bs3'); box.classList.toggle('hlon',!!BR.hl);
+    box.querySelectorAll('li').forEach(x=>x.classList.toggle('hl',x.dataset.i===BR.hl));
+    if(BR.hl)sideInfo(i); else { const b=Q('#bsinfo'); if(b)b.hidden=true; } return; }
+  if(e.target.closest('textarea,button,a'))return;
+  const r=e.target.closest('[data-i]'); if(r&&r.dataset.i)openBook(r.dataset.i);
+});
+window.TRACE_BRIEF={drvId,DLB,paintBrief,stats,picks};
+})();
+</script>
+
 </body></html>
