@@ -3447,11 +3447,31 @@ async function cfgPull(pw){
   return {n:Object.keys(box).length, at:row.updated_at};
 }
 const SB_KEY='sb_publishable_pbTJ_aXqKxtfUPul_JIvsg_2T9lOuhc';
+/* 2026-10-29 — 큰 표는 나눠 받는다.
+   경로(paths)는 6천 건·12MB 가 넘어 한 번에 받으면 서버 시간 제한에 걸려 500 이 났고,
+   그러면 화면 전체가 파일 자료로 돌아갔다. 1,500건씩 나눠 받고, 일시 오류는 한 번 더 시도한다. */
+const SB_PAGED={paths:1500};
+async function sbFetch(path){
+  for(let t=0;;t++){
+    const r=await fetch(`${SB_URL}/rest/v1/${path}`,
+      {headers:{apikey:SB_KEY,Authorization:`Bearer ${SB_KEY}`}});
+    if(r.ok)return r.json();
+    if(t<1&&r.status>=500){ await new Promise(f=>setTimeout(f,1500)); continue; }
+    throw new Error(`서버 응답 ${r.status}`);
+  }
+}
 async function sbGet(path){
-  const r=await fetch(`${SB_URL}/rest/v1/${path}`,
-    {headers:{apikey:SB_KEY,Authorization:`Bearer ${SB_KEY}`}});
-  if(!r.ok)throw new Error(`서버 응답 ${r.status}`);
-  return r.json();
+  const tbl=String(path).split('?')[0], size=SB_PAGED[tbl];
+  if(!size||!/^[a-z_]+\?select=\*&limit=\d+$/.test(path))return sbFetch(path);
+  const page=i=>sbFetch(`${tbl}?select=*&order=isbn&limit=${size}&offset=${i*size}`);
+  let out=[], i=0;
+  for(;;){                                   // 네 쪽씩 함께 받고, 덜 찬 쪽이 나오면 멈춘다
+    const got=await Promise.all([0,1,2,3].map(k=>page(i+k)));
+    got.forEach(a=>{ out=out.concat(a); });
+    i+=4;
+    if(got.some(a=>a.length<size))break;
+  }
+  return out;
 }
 /** 서버 자료로 DB 를 통째로 갈아 끼운다. 실패하면 파일 안 자료를 그대로 쓴다. */
 async function serverSync(quiet){
